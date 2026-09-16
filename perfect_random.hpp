@@ -42,7 +42,7 @@ private:
     int      out_idx;
     size_t   N;
 
-    void step() {
+    inline void step() {
         a = (a * MUL_A) % M;
         b = (b * MUL_B) % M;
         c = (c * c + a + b) % M;
@@ -56,7 +56,7 @@ private:
         }
     }
 
-    uint32_t current_value() const {
+    inline uint32_t current_value() const {
         return (uint32_t)((a * b + c) % M);
     }
 
@@ -67,7 +67,7 @@ public:
         seed(s);
     }
 
-    void seed(uint64_t s) {
+    inline void seed(uint64_t s) {
         if (s == 0) s = 1;
         a = (s * MUL_A) % M;
         if (a == 0) a = 1;
@@ -79,12 +79,12 @@ public:
         out_idx = 0;
     }
 
-    double generate() {
+    inline double generate() {
         step();
         return (double)current_value() / (double)M;
     }
 
-    uint32_t generate_raw() {
+    inline uint32_t generate_raw() {
         step();
         return current_value();
     }
@@ -199,16 +199,16 @@ private:
 public:
     AssociativityCore(uint64_t s) : rng(s, 48) {}
 
-    double generate() {
+    inline double generate() {
         return rng.generate();
     }
 
     // FIX: добавлен generate_raw() для корректной детекции коллизий
-    uint32_t generate_raw() {
+    inline uint32_t generate_raw() {
         return rng.generate_raw();
     }
 
-    uint64_t state_seed() {
+    inline uint64_t state_seed() {
         uint64_t a = rng.get_a();
         uint64_t b = rng.get_b();
         uint64_t c = rng.get_c();
@@ -228,7 +228,7 @@ public:
     MeanCore(double m, uint64_t s) : mean(m), rng(s, 49) {}
 
     // FIX: UINT_MAX → CascadePRNG::M
-    double adjust(double base) {
+    inline double adjust(double base) {
         return (base / static_cast<double>(CascadePRNG::M)) * mean + rng.generate();
     }
 };
@@ -245,7 +245,7 @@ public:
 
     FantasyCore(uint64_t s) : rng(s, 50) {}
 
-    void add_collision(unsigned int a, unsigned int b) {
+    inline void add_collision(unsigned int a, unsigned int b) {
         if (a == b) return;
 
         std::bitset<32> bits_a(a);
@@ -264,7 +264,7 @@ public:
         }
     }
 
-    double apply_fantasy(double base) {
+    inline double apply_fantasy(double base) {
         for (const auto& dim : dimensions) {
             if (rng.generate() == 0) {
                 base += dim[0] * 0.01;
@@ -294,7 +294,7 @@ private:
     size_t             inc_counter;
     size_t             inc_max;
 
-    void reseed(uint64_t new_seed) {
+    inline void reseed(uint64_t new_seed) {
         master_seed = new_seed;
         uint64_t s1 = SeedCascade::derive(new_seed, 0);
         uint64_t s2 = SeedCascade::derive(new_seed, 1);
@@ -322,17 +322,17 @@ public:
     }
 
     // FIX: unsigned int → uint32_t
-    bool isCollision(uint32_t value) {
+    inline bool isCollision(uint32_t value) {
         if (history.count(value) > 0) return true;
         history.insert(value);
         return false;
     }
 
-    void handle_collision(uint32_t a, uint32_t b) {
+    inline void handle_collision(uint32_t a, uint32_t b) {
         fantasyCore.add_collision(a, b);
     }
 
-    double generate() {
+    inline double generate() {
         if (inc_counter >= inc_max) {
             uint64_t fresh_seed = assocCore.state_seed();
             reseed(fresh_seed ^ master_seed);
@@ -376,10 +376,10 @@ public:
         return current;
     }
 
-    void clearHistory() { history.clear(); }
-    size_t getHistorySize() const { return history.size(); }
+    inline void clearHistory() { history.clear(); }
+    inline size_t getHistorySize() const { return history.size(); }
 
-    void reset() {
+    inline void reset() {
         reseed(master_seed + 1);
         clearHistory();
         fantasyCore.dimensions.clear();
