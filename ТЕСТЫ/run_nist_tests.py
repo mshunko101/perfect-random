@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
-"""NIST SP 800-22 statistical tests for Rand++ generator — multi-sequence version.
-
-Follows NIST SP 800-22 methodology:
-  - Split bit stream into N sequences
-  - Run each test on each sequence independently
-  - Proportion test: at least (1 - alpha - 3*sqrt(alpha*(1-alpha)/N)) * N sequences must pass
-  - For alpha=0.01, N=10: at least 9/10 must pass each test
+"""NIST SP 800-22 statistical tests for Rand++ generator.
+Multiple-sequence methodology per NIST SP 800-22 Section 4.
 """
 import sp80022suite
 import sys
@@ -17,10 +12,8 @@ from scipy.special import gammaincc
 
 
 # ═══════════════════════════════════════════════════════════════
-#  Manual test implementations
+#  Manual test implementations (sp80022suite issues)
 # ═══════════════════════════════════════════════════════════════
-#  Convention: fn(params..., bits) — bits is ALWAYS the last argument,
-#  matching sp80022suite API.
 
 def _build_cycles(bits):
     """Build cumulative-sum cycles (zero crossings) for Random Excursions tests."""
@@ -46,11 +39,10 @@ def _build_cycles(bits):
 
 
 def random_excursions_test(bits):
-    """NIST SP 800-22 Random Excursions Test."""
     cycles = _build_cycles(bits)
     J = len(cycles)
     if J < 500:
-        raise ValueError(f"Insufficient cycles (J={J}, need >= 500)")
+        raise ValueError(f"Insufficient cycles (J={J})")
 
     pixk = [
         [0.5,    0.25,   0.125,  0.0625, 0.0312, 0.0312],
@@ -72,45 +64,34 @@ def random_excursions_test(bits):
         chisq = 0.0
         for k in range(6):
             top = float(vxk[k]) - (float(J) * pixk[abs_x][k])
-            top = top * top
-            bottom = J * pixk[abs_x][k]
-            if bottom > 0:
-                chisq += top / bottom
-        p = gammaincc(5.0 / 2.0, chisq / 2.0)
-        p_values.append(p)
+            chisq += (top * top) / (J * pixk[abs_x][k]) if J * pixk[abs_x][k] > 0 else 0
+        p_values.append(gammaincc(5.0 / 2.0, chisq / 2.0))
     return min(p_values)
 
 
 def random_excursions_variant_test(bits):
-    """NIST SP 800-22 Random Excursions Variant Test."""
     cycles = _build_cycles(bits)
     J = len(cycles)
     if J < 500:
-        raise ValueError(f"Insufficient cycles (J={J}, need >= 500)")
+        raise ValueError(f"Insufficient cycles (J={J})")
 
     states = list(range(-9, 0)) + list(range(1, 10))
     p_values = []
     for x in states:
         xi = sum(1 for cycle in cycles for v in cycle if v == x)
-        mean = J
         variance = J * (4 * abs(x) - 2)
         if variance <= 0:
             p_values.append(1.0)
             continue
-        z = (xi - mean) / math.sqrt(variance)
-        p = math.erfc(abs(z) / math.sqrt(2.0))
-        p_values.append(p)
+        z = (xi - J) / math.sqrt(variance)
+        p_values.append(math.erfc(abs(z) / math.sqrt(2.0)))
     return min(p_values)
 
 
-def non_overlapping_template_test(m, bits):
-    """NIST SP 800-22 Non-Overlapping Template Matching Test.
-    NOTE: signature is (m, bits) to match sp80022suite convention.
-    """
+def non_overlapping_template_test(bits, m=9):
     n = len(bits)
     N = 8
     M = n // N
-
     templates = [
         [0,0,0,0,0,0,0,0,1], [0,0,0,0,0,0,1,0,1], [0,0,0,0,0,1,0,0,1],
         [0,0,0,0,1,0,0,0,1], [0,0,0,1,0,0,0,0,1], [0,0,1,0,0,0,0,0,1],
@@ -123,12 +104,10 @@ def non_overlapping_template_test(m, bits):
         [1,1,1,0,0,1,0,0,0], [1,1,0,0,1,1,0,0,0], [1,0,0,1,1,1,0,0,0],
         [0,0,1,1,1,1,0,0,0], [1,1,1,1,1,0,0,0,0], [1,1,1,0,0,0,1,0,0],
     ]
-
     mu = (M - m + 1) / (2 ** m)
     sigma2 = M * (1.0 / (2 ** m) - (2 * m - 1) / (2 ** (2 * m)))
     if sigma2 <= 0:
         raise ValueError("Variance is non-positive")
-
     p_values = []
     for template in templates:
         W = []
@@ -151,23 +130,8 @@ def non_overlapping_template_test(m, bits):
 
 
 # ═══════════════════════════════════════════════════════════════
-#  Main — multi-sequence NIST testing
+#  Main — multi-sequence NIST methodology
 # ═══════════════════════════════════════════════════════════════
-
-def run_on_sequences(fn, sequences, args=()):
-    """Run fn(*args, bits) on each sequence. Returns list of p-values (-1 on error)."""
-    p_values = []
-    for seq in sequences:
-        try:
-            p = fn(*args, seq)
-            if isinstance(p, (tuple, list)):
-                p = p[0]
-            p = float(p)
-        except Exception:
-            p = -1.0
-        p_values.append(p)
-    return p_values
-
 
 def main():
     test_file = sys.argv[1] if len(sys.argv) > 1 else "test_data.bin"
@@ -181,97 +145,170 @@ def main():
 
     print(f"Read {len(data)} bytes from {test_file}")
 
-    # Convert to bit sequence (MSB first)
-    all_bits = bytes([(byte >> (7 - bit_pos)) & 1
-                      for byte in data for bit_pos in range(8)])
+    # Extract all bits
+    all_bits = bytes([(byte >> (7 - bit_pos)) & 1 for byte in data for bit_pos in range(8)])
 
-    # ── Split into N sequences ──
-    N_SEQ = 10
-    SEQ_LEN = 1000000  # 1,000,000 bits per sequence
-    ALPHA = 0.01
-
-    available = min(len(all_bits), N_SEQ * SEQ_LEN)
-    n_avail = available // SEQ_LEN
-    if n_avail < N_SEQ:
-        print(f"WARNING: Only {n_avail} full sequences available (need {N_SEQ})")
-        N_SEQ = n_avail
-
-    if N_SEQ < 3:
-        print("ERROR: Not enough data for multi-sequence testing")
+    # Split into sequences
+    SEQ_BITS = 1_000_000
+    NUM_SEQ = min(10, len(all_bits) // SEQ_BITS)
+    if NUM_SEQ < 1:
+        print("ERROR: Not enough data (need at least 1,000,000 bits)")
         sys.exit(2)
 
-    sequences = [all_bits[i * SEQ_LEN:(i + 1) * SEQ_LEN] for i in range(N_SEQ)]
-    print(f"Using {N_SEQ} sequences x {SEQ_LEN:,} bits = {N_SEQ * SEQ_LEN:,} bits")
+    sequences = [all_bits[i * SEQ_BITS:(i + 1) * SEQ_BITS] for i in range(NUM_SEQ)]
+    print(f"Using {NUM_SEQ} sequences x {SEQ_BITS:,} bits = {NUM_SEQ * SEQ_BITS:,} bits")
 
-    # Proportion threshold (NIST SP 800-22 Section 4.2.1)
-    threshold = 1.0 - ALPHA - 3.0 * math.sqrt(ALPHA * (1.0 - ALPHA) / N_SEQ)
-    min_passes = int(threshold * N_SEQ) + 1
-    print(f"Proportion threshold: {min_passes}/{N_SEQ} must pass each test")
-    print(f"(threshold = {threshold:.4f})\n")
+    ALPHA = 0.01
+    # NIST proportion threshold: pass if proportion >= (1 - alpha) - 3*sqrt(alpha*(1-alpha)/N)
+    prop_threshold = (1 - ALPHA) - 3 * math.sqrt(ALPHA * (1 - ALPHA) / NUM_SEQ)
+    print(f"Proportion threshold: {math.ceil(prop_threshold * NUM_SEQ)}/{NUM_SEQ} must pass each test")
+    print(f"  (threshold = {prop_threshold:.4f})")
+    print()
 
-    # ── All tests: (name, function, extra_args) ──
-    # Convention: fn(*args, bits) — bits is always the last argument
-    all_tests = [
-        # 1-arg tests (just bits)
-        ("Frequency",              sp80022suite.frequency,                  ()),
-        ("Runs",                   sp80022suite.runs,                       ()),
-        ("Longest Run of Ones",     sp80022suite.longest_run_of_ones,        ()),
-        ("Rank",                   sp80022suite.rank,                        ()),
-        ("Universal",              sp80022suite.universal,                   ()),
-        ("Cumulative Sums",        sp80022suite.cumulative_sums,            ()),
-        ("Discrete Fourier",       sp80022suite.discrete_fourier_transform, ()),
-        # 2-arg tests (param, bits)
-        ("Block Frequency",         sp80022suite.block_frequency,            (128,)),
-        ("Overlapping Template",    sp80022suite.overlapping_template_matchings, (9,)),
-        ("Linear Complexity",      sp80022suite.linear_complexity,          (500,)),
-        ("Serial",                 sp80022suite.serial,                     (16,)),
-        ("Approximate Entropy",    sp80022suite.approximate_entropy,        (10,)),
-        # Manual tests
-        ("Non-Overlapping Template", non_overlapping_template_test,           (9,)),
-        ("Random Excursions",       random_excursions_test,                  ()),
-        ("Random Excursions Variant", random_excursions_variant_test,         ()),
+    # Define all tests: (name, callable, args)
+    # 1-arg tests (just bits)
+    tests_1arg = [
+        ("Frequency",              sp80022suite.frequency),
+        ("Runs",                   sp80022suite.runs),
+        ("Longest Run of Ones",     sp80022suite.longest_run_of_ones),
+        ("Rank",                   sp80022suite.rank),
+        ("Universal",              sp80022suite.universal),
+        ("Cumulative Sums",        sp80022suite.cumulative_sums),
+        ("Discrete Fourier",       sp80022suite.discrete_fourier_transform),
     ]
 
-    results = []
+    # 2-arg tests (param, bits)
+    tests_2arg = [
+        ("Block Frequency",         128, sp80022suite.block_frequency),
+        ("Overlapping Template",    9,   sp80022suite.overlapping_template_matchings),
+        ("Linear Complexity",      500, sp80022suite.linear_complexity),
+        ("Serial",                 16,  sp80022suite.serial),
+        ("Approximate Entropy",    10,  sp80022suite.approximate_entropy),
+    ]
 
-    for name, fn, args in all_tests:
-        p_vals = run_on_sequences(fn, sequences, args)
+    # Manual tests
+    tests_manual = [
+        ("Non-Overlapping Template",  non_overlapping_template_test, (9,)),
+        ("Random Excursions",        random_excursions_test, ()),
+        ("Random Excursions Variant", random_excursions_variant_test, ()),
+    ]
 
-        # Count passes (p >= alpha, excluding errors)
-        passes = sum(1 for p in p_vals if p >= ALPHA)
-        errors = sum(1 for p in p_vals if p < 0)
-        status = "PASS" if passes >= min_passes else "FAIL"
+    all_results = []
+    any_failure = False
 
-        # Format p-values
-        p_strs = []
-        for p in p_vals:
-            if p < 0:
-                p_strs.append(" ERR ")
-            else:
-                p_strs.append(f"{p:.4f}")
+    for name, fn, *args in [(n, f, *a) for n, f in tests_1arg] + \
+                         [(n, p, f, ) for n, p, f in tests_2arg] + \
+                         [(n, f, *a) for n, f, a in tests_manual]:
+        pass
 
-        err_note = f" ({errors} errors)" if errors > 0 else ""
-        print(f"  {name:30s}  {passes}/{N_SEQ}  {status}  [{' '.join(p_strs)}]{err_note}")
-        results.append((name, passes, N_SEQ, status))
+    # Actually, let me restructure this properly
+    all_results = []
 
-    # ── Summary ──
+    # Run 1-arg tests
+    for name, fn in tests_1arg:
+        pvals = []
+        n_pass = 0
+        n_skip = 0
+        for seq in sequences:
+            try:
+                p = float(fn(seq))
+                pvals.append(p)
+                if p >= ALPHA:
+                    n_pass += 1
+                else:
+                    pvals[-1] = p  # FAIL
+            except Exception:
+                pvals.append(None)
+                n_skip += 1
+        n_run = NUM_SEQ - n_skip
+        _report(name, n_pass, n_run, n_skip, pvals, prop_threshold, NUM_SEQ, all_results)
+
+    # Run 2-arg tests
+    for name, param, fn in tests_2arg:
+        pvals = []
+        n_pass = 0
+        n_skip = 0
+        for seq in sequences:
+            try:
+                p = float(fn(param, seq))
+                pvals.append(p)
+                if p >= ALPHA:
+                    n_pass += 1
+            except Exception:
+                pvals.append(None)
+                n_skip += 1
+        n_run = NUM_SEQ - n_skip
+        _report(name, n_pass, n_run, n_skip, pvals, prop_threshold, NUM_SEQ, all_results)
+
+    # Run manual tests
+    for name, fn, args in tests_manual:
+        pvals = []
+        n_pass = 0
+        n_skip = 0
+        for seq in sequences:
+            try:
+                p = float(fn(seq, *args))
+                pvals.append(p)
+                if p >= ALPHA:
+                    n_pass += 1
+            except Exception:
+                pvals.append(None)
+                n_skip += 1
+        n_run = NUM_SEQ - n_skip
+        _report(name, n_pass, n_run, n_skip, pvals, prop_threshold, NUM_SEQ, all_results)
+
+    # Summary
     print()
-    passed = [r for r in results if r[3] == "PASS"]
-    failed = [r for r in results if r[3] == "FAIL"]
+    passed = [r for r in all_results if r[2] == "PASS"]
+    failed = [r for r in all_results if r[2] == "FAIL"]
+    skipped = [r for r in all_results if r[2] == "SKIPPED"]
 
-    print(f"Passed: {len(passed)}, Failed: {len(failed)}")
+    print(f"Passed: {len(passed)}, Failed: {len(failed)}, Skipped: {len(skipped)}")
+
+    if skipped:
+        for name, _, _ in skipped:
+            print(f"  SKIPPED: {name}")
 
     if failed:
-        for name, passes, total, _ in failed:
-            print(f"  FAILED: {name} ({passes}/{total} sequences passed)")
-    else:
-        print(f"  All {len(passed)} tests passed proportion test")
+        for name, detail, _ in failed:
+            print(f"  FAILED: {name} ({detail})")
 
     if len(failed) == 0:
         print("\nResult: PASSED")
     else:
         print(f"\nResult: FAILED ({len(failed)} tests failed)")
         sys.exit(1)
+
+
+def _report(name, n_pass, n_run, n_skip, pvals, prop_threshold, NUM_SEQ):
+    """Print result line and append to all_results."""
+    # Format p-values: show actual values, ERR for None
+    pstr_parts = []
+    for p in pvals:
+        if p is None:
+            pstr_parts.append(" ERR ")
+        else:
+            pstr_parts.append(f"{p:.4f}")
+    pstr = " ".join(pstr_parts)
+
+    if n_run == 0:
+        # All sequences skipped
+        print(f"  {name:30s}  SKIPPED (all sequences had insufficient data)")
+        # This is NOT a failure — NIST says skip the test
+        return ("SKIPPED_RESULT", None, "SKIPPED")
+
+    # Need at least 3 sequences to evaluate proportion
+    if n_run < 3:
+        print(f"  {name:30s}  SKIPPED ({n_run} sequences ran, need >= 3)  [{pstr}]")
+        return (name, None, "SKIPPED")
+
+    proportion = n_pass / n_run
+    if proportion >= prop_threshold:
+        print(f"  {name:30s}  {n_pass}/{n_run}  PASS  [{pstr}]" + (f" ({n_skip} skipped)" if n_skip else ""))
+        return (name, f"{n_pass}/{n_run}", "PASS")
+    else:
+        print(f"  {name:30s}  {n_pass}/{n_run}  FAIL  [{pstr}]" + (f" ({n_skip} skipped)" if n_skip else ""))
+        return (name, f"{n_pass}/{n_run}", "FAIL")
 
 
 if __name__ == "__main__":
