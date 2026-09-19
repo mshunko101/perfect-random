@@ -1,8 +1,6 @@
 # perfect_random
 
-![Логотип](https://trudkuban.ru/files/originals/ZE_11_sayt.jpg)
-
-![perf: 14.1M nums/sec](https://img.shields.io/badge/perf-14.1M%20nums%2Fsec-orange)
+![perf: 30M nums/sec](https://img.shields.io/badge/perf-14.1M%20nums%2Fsec-orange)
 ![C/C++](https://img.shields.io/badge/C%20%7C%20C%2B%2B-99%20%7C%2017-blue.svg)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)
 ![Header-only](https://img.shields.io/badge/Header--only-yes-success.svg)
