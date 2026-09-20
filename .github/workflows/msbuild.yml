@@ -188,6 +188,8 @@ jobs:
           Copy-Item -Path "LICENSE" -Destination "${{ env.ARTIFACTS_DIR }}" -Force
           Copy-Item -Path "ВЕРСИИ\perfect_random.hpp" -Destination "${{ env.ARTIFACTS_DIR }}" -Force
           Copy-Item -Path "ВЕРСИИ\perfect_random_c.h" -Destination "${{ env.ARTIFACTS_DIR }}" -Force
+          Copy-Item -Path "ВЕРСИИ\perfect_random.hpp.sha256" -Destination "${{ env.ARTIFACTS_DIR }}" -Force
+          Copy-Item -Path "ВЕРСИИ\perfect_random_c.h.sha256" -Destination "${{ env.ARTIFACTS_DIR }}" -Force
           Copy-Item -Path "ВЕРСИИ\ZetaCalc.h" -Destination "${{ env.ARTIFACTS_DIR }}" -Force
           if (Test-Path "PERFECT_RANDOM_LOGO.JPEG") {
             Copy-Item -Path "PERFECT_RANDOM_LOGO.JPEG" -Destination "${{ env.ARTIFACTS_DIR }}" -Force
