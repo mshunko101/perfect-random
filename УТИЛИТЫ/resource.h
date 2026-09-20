@@ -64,6 +64,8 @@
 #define IDC_YEAR                        2019
 #define IDC_IMPORT                      2020
 #define IDC_REMOVE                      2021
+#define IDC_ABOUT_TEXT                  2022
+#define IDC_SHOW_ABOUD                  2023
 
 #define IDC_STATIC                      -1
 
