@@ -2,12 +2,9 @@
 
 ![Логотип](perfect_random_logo.jpeg)
 
-![C/C++](https://img.shields.io/badge/C%20%7C%20C%2B%2B-99%20%7C%2017-blue.svg)
-![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)
+![C++17](https://img.shields.io/badge/C%2B%2B-17%2B-blue.svg)
 ![Header-only](https://img.shields.io/badge/Header--only-yes-success.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-lightgrey.svg)
-[![Release](https://img.shields.io/github/v/release/MSHUNKO101/perfect_random)](https://github.com/MSHUNKO101/perfect_random/releases)
-[![License](https://img.shields.io/github/license/MSHUNKO101/perfect_random)](LICENSE)
 
 ---
 
