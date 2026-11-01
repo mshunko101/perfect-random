@@ -26,7 +26,7 @@
 extern "C" {
 #include "../../ВЕРСИИ/perfect_random_c.h"
 }
-
+#include "bench_speed.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -775,139 +775,6 @@ TestResult test_urbg_64bit(const std::string& name, EngineType) {
     return { true, name, "" };
 }
 
-// ===============================================================
-//  Скоростной бенчмарк (STD-интерфейс) — интегрирован в тесты
-//  Прогрев + best of 3; эталон — std::mt19937_64
-// ===============================================================
-
-struct BenchResult {
-    std::string name;
-    double ns_per_call;
-    double nums_per_sec;   // млн/сек
-    double gb_per_sec;     // ГБ/сек (double = 8 байт)
-};
-
-template<typename GenFn>
-static BenchResult run_bench(const std::string& name, std::size_t N, GenFn fn) {
-    // Прогрев
-    std::size_t warmup = std::max<std::size_t>(N / 100, 100000);
-    volatile double warmup_sink = 0.0;
-    for (std::size_t i = 0; i < warmup; ++i)
-        warmup_sink += fn();
-
-    // Best of 3
-    double best_time = 1e18;
-    for (int run = 0; run < 3; ++run) {
-        volatile double sink = 0.0;
-        auto t0 = std::chrono::high_resolution_clock::now();
-        for (std::size_t i = 0; i < N; ++i)
-            sink += fn();
-        auto t1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> dt = t1 - t0;
-        if (dt.count() < best_time)
-            best_time = dt.count();
-    }
-
-    return {
-        name,
-        best_time / N * 1e9,
-        N / best_time / 1e6,
-        N * 8.0 / best_time / 1e9
-    };
-}
-
-static const char* compiler_name() {
-#if defined(__clang__)
-    return "Clang";
-#elif defined(__GNUC__)
-    return "GCC";
-#elif defined(_MSC_VER)
-    return "MSVC";
-#else
-    return "Unknown";
-#endif
-}
-
-static void run_benchmark(std::size_t N) {
-    std::cout << "\n===================================================\n";
-    std::cout << "  Бенчмарк: perfect_random vs std::mt19937_64\n";
-    std::cout << "  Компилятор: " << compiler_name();
-#if defined(__VERSION__)
-    std::cout << " (" << __VERSION__ << ")";
-#endif
-    std::cout << "\n  Выборка: " << N
-              << " | Прогоны: 3 (best of), прогрев: "
-              << std::max<std::size_t>(N / 100, 100000) << "\n";
-    std::cout << "  Каскад: N=" << BENCH_PERIOD
-              << ", Seed: " << BENCH_SEED << "\n";
-    std::cout << "===================================================\n\n";
-
-    // ── Генераторы (вся генерация через STD-интерфейс) ──
-    perfect_random::cascade_prng   rng31(BENCH_SEED, BENCH_PERIOD);
-    perfect_random::cascade_prng64 rng64(BENCH_SEED, BENCH_PERIOD);
-    cascade_prng   c_rng;
-    cascade_prng64 c_rng64;
-    cascade_prng_init(&c_rng, BENCH_SEED, BENCH_PERIOD);
-    cascade_prng64_init(&c_rng64, BENCH_SEED, BENCH_PERIOD);
-    std::mt19937_64 mt(BENCH_SEED);
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
-
-    auto cpp31_fn = [&]() { Cpp31Adapter g{&rng31};  return dist(g); };
-    auto cpp64_fn = [&]() { Cpp64Adapter g{&rng64};  return dist(g); };
-    auto c31_fn   = [&]() { C31Adapter   g{&c_rng};  return dist(g); };
-    auto c64_fn   = [&]() { C64Adapter   g{&c_rng64}; return dist(g); };
-    auto mt_fn    = [&]() { return dist(mt); };
-
-    // ── Прогоны ──
-    std::vector<BenchResult> results;
-    results.push_back(run_bench("perfect_random C++ 31", N, cpp31_fn));
-    results.push_back(run_bench("perfect_random C++ 61", N, cpp64_fn));
-    results.push_back(run_bench("perfect_random C   31", N, c31_fn));
-    results.push_back(run_bench("perfect_random C   61", N, c64_fn));
-    results.push_back(run_bench("mt19937_64 + dist",     N, mt_fn));
-
-    // ── Таблица ──
-    std::cout << "  " << std::left << std::setw(26) << "Генератор"
-        << std::right
-        << std::setw(12) << "нс/вызов"
-        << std::setw(14) << "млн чисел/с"
-        << std::setw(12) << "ГБ/с"
-        << "\n";
-    std::cout << "  " << std::string(64, '-') << "\n";
-    for (const auto& r : results) {
-        std::cout << "  " << std::left << std::setw(26) << r.name
-            << std::right
-            << std::setw(12) << std::fixed << std::setprecision(2) << r.ns_per_call
-            << std::setw(14) << std::fixed << std::setprecision(1) << r.nums_per_sec
-            << std::setw(12) << std::fixed << std::setprecision(2) << r.gb_per_sec
-            << "\n";
-    }
-
-    // ── Сравнение с эталоном ──
-    double baseline = results.back().nums_per_sec;
-    std::cout << "\n  Относительно mt19937_64 + dist:\n";
-    for (const auto& r : results) {
-        double ratio = r.nums_per_sec / baseline;
-        std::cout << "  " << std::left << std::setw(26) << r.name
-            << std::right << std::setw(8)
-            << std::fixed << std::setprecision(2) << ratio << "x\n";
-    }
-
-    // ── Markdown для README ──
-    std::cout << "\n  Markdown (для README):\n\n";
-    std::cout << "| Генератор | нс/вызов | млн чисел/с | ГБ/с | vs mt19937 |\n";
-    std::cout << "|-----------|----------|-------------|------|------------|\n";
-    for (const auto& r : results) {
-        double ratio = r.nums_per_sec / baseline;
-        std::cout << "| " << r.name
-            << " | " << std::fixed << std::setprecision(2) << r.ns_per_call
-            << " | " << std::fixed << std::setprecision(1) << r.nums_per_sec
-            << " | " << std::fixed << std::setprecision(2) << r.gb_per_sec
-            << " | " << std::fixed << std::setprecision(2) << ratio << "x |"
-            << "\n";
-    }
-    std::cout << "\n";
-}
 
 // ===============================================================
 //  Main
@@ -1001,7 +868,7 @@ int main(int argc, char* argv[]) {
     std::cout << "===================================================\n";
 
     // ── Скоростной бенчмарк ──
-    run_benchmark(bench_N);
+    bentch_speed();
 
     return (g_tests_failed > 0) ? 1 : 0;
 }
