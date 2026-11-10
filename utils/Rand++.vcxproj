@@ -194,8 +194,6 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\ВЕРСИИ\perfect_random.hpp" />
-    <ClInclude Include="..\ВЕРСИИ\perfect_random_c.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Rand++.h" />

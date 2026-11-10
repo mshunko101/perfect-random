@@ -128,10 +128,10 @@ struct GenWrapper {
     {
         switch (eng) {
         case EngineType::CPP_Standard:
-            cpp31 = new perfect_random::cascade_prng(seed, n);
+            cpp31 = new perfect_random::cascade_prng(seed, seed, n);
             break;
         case EngineType::CPP_MonteCarlo:
-            cpp64 = new perfect_random::cascade_prng64(seed, n);
+            cpp64 = new perfect_random::cascade_prng64(seed, seed, n);
             break;
         case EngineType::C_Standard:
             c31 = new cascade_prng;
@@ -716,7 +716,7 @@ TestResult test_urbg_31bit(const std::string& name, EngineType) {
     ASSERT_EQ((std::uint64_t)G::max(), G::M - 1, "max() must be M-1");
 
     // discard(n) ≡ n вызовов operator()
-    G g1(42, PERIOD), g2(42, PERIOD);
+    G g1(42, 42, PERIOD), g2(42, 42, PERIOD);
     for (int i = 0; i < 1000; i++) g2();
     g1.discard(1000);
     for (int i = 0; i < 100; i++) {
@@ -750,7 +750,7 @@ TestResult test_urbg_64bit(const std::string& name, EngineType) {
     ASSERT_EQ((std::uint64_t)G::min(), 0, "min() must be 0 (honest trimming)");
     ASSERT_EQ((std::uint64_t)G::max(), G::M - 1, "max() must be M-1 (not UINT64_MAX)");
 
-    G g1(42, PERIOD), g2(42, PERIOD);
+    G g1(42, 42, PERIOD), g2(42, 42, PERIOD);
     for (int i = 0; i < 1000; i++) g2();
     g1.discard(1000);
     for (int i = 0; i < 100; i++) {
