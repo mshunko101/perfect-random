@@ -782,7 +782,7 @@ int main(int argc, char* argv[]) {
     // Объём бенчмарка: по умолчанию 10 млн (быстро после тестов)
     std::size_t bench_N = 10'000'000;
     if (argc > 1) bench_N = std::stoull(argv[1]);
-
+/*
     std::cout << "===================================================\n";
     std::cout << "  perfect_random — тесты + бенчмарк (STD-интерфейс)\n";
     std::cout << "  MSHUNKO 2026 © Шунько Михаил Геннадьевич\n";
@@ -864,7 +864,7 @@ int main(int argc, char* argv[]) {
               << " | PASS: " << g_tests_passed
               << " | FAIL: " << g_tests_failed << "\n";
     std::cout << "===================================================\n";
-
+    */
     #include <cstdlib>
  
     // ── Скоростной бенчмарк ──
