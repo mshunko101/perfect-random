@@ -15,19 +15,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\ВЕРСИИ\perfect_random.hpp">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="bench_speed.h">
+      <Filter>Исходные файлы</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\ВЕРСИИ\perfect_random_c.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="..\..\versions\non-crypto\perfect_random.hpp">
+      <Filter>Исходные файлы</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\versions\non-crypto\perfect_random_c.h">
+      <Filter>Исходные файлы</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cpp_tests.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
-    <ClCompile Include="bench_speed.h">
-      <Filter>Исходные файлы</Filter>
+      <Filter>Файлы заголовков</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

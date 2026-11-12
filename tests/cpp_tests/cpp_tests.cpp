@@ -12,8 +12,7 @@
 // Запуск:
 //   ./cpp_tests             — все тесты + бенчмарк (10 млн чисел)
 //   ./cpp_tests 500000000   — свой объём бенчмарка
-
-#include "../../ВЕРСИИ/perfect_random.hpp"
+#include "../../versions/non-crypto/perfect_random.hpp"
 
 // ── Совместимость со старыми версиями заголовка ──────────────────
 #if defined(HAS_INT128) && !defined(PR_HAS_INT128)
@@ -24,9 +23,9 @@
 // C-типы (cascade_prng, cascade_prng64) не конфликтуют с C++ типами,
 // т.к. C++-классы живут в namespace perfect_random.
 extern "C" {
-#include "../../ВЕРСИИ/perfect_random_c.h"
+#include "../../versions/non-crypto/perfect_random_c.h"
 }
-#include "bench_speed.h"
+
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -39,7 +38,7 @@ extern "C" {
 #include <numeric>
 #include <algorithm>
 #include <functional>
-
+#include "bench_speed.h"
 using namespace std;
 
 // ── Константы ────────────────────────────────────────────────────
@@ -47,9 +46,9 @@ static constexpr std::size_t PERIOD       = 40;    // длина каскада 
 static constexpr std::size_t BENCH_PERIOD = 73;    // длина каскада в бенчмарке
 static constexpr unsigned    BENCH_SEED   = 12345;
 
-// ===============================================================
+// ===============================================═
 //  EngineType — 4 движка
-// ===============================================================
+// ===============================================═
 enum class EngineType {
     CPP_Standard,    // 31-bit C++, cascade_prng
     CPP_MonteCarlo,  // 61-bit C++, cascade_prng64
@@ -71,10 +70,10 @@ static bool Is64Bit(EngineType e) {
     return e == EngineType::CPP_MonteCarlo || e == EngineType::C_MonteCarlo;
 }
 
-// ===============================================================
+// ===============================================═
 //  STD-адаптеры — единственный канал генерации в тестах
 //  (неконстантный lvalue-объект: распределения STL требуют URBG&)
-// ===============================================================
+// ===============================================═
 struct Cpp31Adapter {
     perfect_random::cascade_prng* p;
     using result_type = std::uint32_t;
@@ -109,9 +108,9 @@ struct C64Adapter {
     result_type operator()() { return cascade_prng64_generate_raw(p); }
 };
 
-// ===============================================================
+// ===============================================═
 //  GenWrapper — универсальная обёртка для всех 4 движков
-// ===============================================================
+// ===============================================═
 struct GenWrapper {
     EngineType engine;
     std::size_t n_;
@@ -128,10 +127,10 @@ struct GenWrapper {
     {
         switch (eng) {
         case EngineType::CPP_Standard:
-            cpp31 = new perfect_random::cascade_prng(seed, seed, n);
+            cpp31 = new perfect_random::cascade_prng(seed, n);
             break;
         case EngineType::CPP_MonteCarlo:
-            cpp64 = new perfect_random::cascade_prng64(seed, seed, n);
+            cpp64 = new perfect_random::cascade_prng64(seed, n);
             break;
         case EngineType::C_Standard:
             c31 = new cascade_prng;
@@ -218,9 +217,9 @@ struct TestResult {
         }                                                              \
     } while (0)
 
-// ===============================================================
+// ===============================================═
 //  Базовые тесты (все движки)
-// ===============================================================
+// ===============================================═
 
 // Тест 1: Воспроизводимость
 TestResult test_reproducibility(const std::string& name, EngineType eng) {
@@ -268,9 +267,9 @@ TestResult test_range(const std::string& name, EngineType eng) {
     return { true, name, "" };
 }
 
-// ===============================================================
+// ===============================================═
 //  Статистические тесты (все движки)
-// ===============================================================
+// ===============================================═
 
 // Тест 5: Среднее ~0.5
 TestResult test_mean(const std::string& name, EngineType eng) {
@@ -534,9 +533,9 @@ TestResult test_shuffle(const std::string& name, EngineType eng) {
     return { true, name, "" };
 }
 
-// ===============================================================
+// ===============================================═
 //  Структурные тесты (все движки)
-// ===============================================================
+// ===============================================═
 
 // Тест 18: Разное смещение потребления → расхождение последовательностей
 TestResult test_period_affects_sequence(const std::string& name, EngineType eng) {
@@ -613,9 +612,9 @@ TestResult test_long_run_stability(const std::string& name, EngineType eng) {
     return { true, name, "" };
 }
 
-// ===============================================================
+// ===============================================═
 //  Monte Carlo тесты (только 61-bit движки)
-// ===============================================================
+// ===============================================═
 
 // Тест 23: Оценка числа Пи
 TestResult test_mc_pi(const std::string& name, EngineType eng) {
@@ -673,9 +672,9 @@ TestResult test_mc_rare_event(const std::string& name, EngineType eng) {
     return { true, name, "" };
 }
 
-// ===============================================================
+// ===============================================═
 //  Кросс-движковые тесты
-// ===============================================================
+// ===============================================═
 
 // Тест 27: C++ standard и C standard дают одинаковый результат
 TestResult test_cross_cpp_c_standard(const std::string& name, EngineType) {
@@ -704,7 +703,6 @@ TestResult test_cross_31_vs_61(const std::string& name, EngineType) {
     return { true, name, "" };
 }
 
-// ===============================================================
 //  C++ URBG тесты (STD-контракт)
 // ===============================================================
 
@@ -716,7 +714,7 @@ TestResult test_urbg_31bit(const std::string& name, EngineType) {
     ASSERT_EQ((std::uint64_t)G::max(), G::M - 1, "max() must be M-1");
 
     // discard(n) ≡ n вызовов operator()
-    G g1(42, 42, PERIOD), g2(42, 42, PERIOD);
+    G g1(42, PERIOD), g2(42, PERIOD);
     for (int i = 0; i < 1000; i++) g2();
     g1.discard(1000);
     for (int i = 0; i < 100; i++) {
@@ -750,7 +748,7 @@ TestResult test_urbg_64bit(const std::string& name, EngineType) {
     ASSERT_EQ((std::uint64_t)G::min(), 0, "min() must be 0 (honest trimming)");
     ASSERT_EQ((std::uint64_t)G::max(), G::M - 1, "max() must be M-1 (not UINT64_MAX)");
 
-    G g1(42, 42, PERIOD), g2(42, 42, PERIOD);
+    G g1(42, PERIOD), g2(42, PERIOD);
     for (int i = 0; i < 1000; i++) g2();
     g1.discard(1000);
     for (int i = 0; i < 100; i++) {
@@ -867,8 +865,10 @@ int main(int argc, char* argv[]) {
               << " | FAIL: " << g_tests_failed << "\n";
     std::cout << "===================================================\n";
 
+    #include <cstdlib>
+ 
     // ── Скоростной бенчмарк ──
-    bentch_speed();
+    bentch_speed(); 
 
     return (g_tests_failed > 0) ? 1 : 0;
 }
