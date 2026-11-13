@@ -243,8 +243,8 @@ public:
         auto c = m_c->generate_raw();
         auto ab = (a + b) / 2;
         auto ac = (a + c) / 2;
-        auto ca = (a + c) / 2;
-        return ab - ac + ~ca;
+        auto ca = ~((a + c) / 2);
+        return ab - ac + ca;
     }
 };
 
