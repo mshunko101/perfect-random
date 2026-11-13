@@ -12,7 +12,7 @@
 // Запуск:
 //   ./cpp_tests             — все тесты + бенчмарк (10 млн чисел)
 //   ./cpp_tests 500000000   — свой объём бенчмарка
-#include "../../versions/non-crypto/perfect_random.hpp"
+#include "../../versions/crypto-non-crypto/perfect_random.hpp"
 
 // ── Совместимость со старыми версиями заголовка ──────────────────
 #if defined(HAS_INT128) && !defined(PR_HAS_INT128)
@@ -23,7 +23,7 @@
 // C-типы (cascade_prng, cascade_prng64) не конфликтуют с C++ типами,
 // т.к. C++-классы живут в namespace perfect_random.
 extern "C" {
-#include "../../versions/non-crypto/perfect_random_c.h"
+#include "../../versions/crypto-non-crypto/perfect_random_c.h"
 }
 
 #include <iostream>
@@ -782,7 +782,7 @@ int main(int argc, char* argv[]) {
     // Объём бенчмарка: по умолчанию 10 млн (быстро после тестов)
     std::size_t bench_N = 10'000'000;
     if (argc > 1) bench_N = std::stoull(argv[1]);
-/*
+
     std::cout << "===================================================\n";
     std::cout << "  perfect_random — тесты + бенчмарк (STD-интерфейс)\n";
     std::cout << "  MSHUNKO 2026 © Шунько Михаил Геннадьевич\n";
@@ -864,9 +864,7 @@ int main(int argc, char* argv[]) {
               << " | PASS: " << g_tests_passed
               << " | FAIL: " << g_tests_failed << "\n";
     std::cout << "===================================================\n";
-    */
-    #include <cstdlib>
- 
+
     // ── Скоростной бенчмарк ──
     bentch_speed(); 
 
