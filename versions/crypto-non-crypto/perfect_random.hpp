@@ -172,7 +172,7 @@ public:
 
     // ── генерация ─────────────────────────────────────────────
     // double в [0, 1)
-    double generate() 
+    double generate()
     {
         step();
         return static_cast<double>(current_value()) / static_cast<double>(M);
@@ -245,6 +245,16 @@ public:
         auto ac = (a + c) / 2;
         auto ca = ~((a + c) / 2);
         return ab - ac + ca;
+    }
+
+    crypto(const crypto&) = delete;
+    crypto& operator=(const crypto&) = delete;
+
+    virtual ~crypto()
+    {
+        delete m_a;
+        delete m_b;
+        delete m_c;
     }
 };
 
@@ -402,6 +412,44 @@ public:
     }
     friend std::istream& operator>>(std::istream& is, cascade_prng64& r) {
         return is >> r.a >> r.b >> r.c >> r.counter >> r.out_idx >> r.N;
+    }
+};
+
+
+
+class crypto64
+{
+    cascade_prng64* m_a;
+    cascade_prng64* m_b;
+    cascade_prng64* m_c;
+
+public:
+    crypto64(uint64_t seed1, uint64_t seed2, uint64_t seed3)
+    {
+        m_a = new cascade_prng64(seed1, 48);
+        m_b = new cascade_prng64(seed2, 49);
+        m_c = new cascade_prng64(seed3, 50);
+    }
+
+    std::uint64_t generate_raw() {
+
+        auto a = m_a->generate_raw();
+        auto b = m_b->generate_raw();
+        auto c = m_c->generate_raw();
+        auto ab = (a + b) / 2;
+        auto ac = (a + c) / 2;
+        auto ca = ~((a + c) / 2);
+        return ab - ac + ca;
+    }
+
+    crypto64(const crypto64&) = delete;
+    crypto64& operator=(const crypto64&) = delete;
+
+    virtual ~crypto64()
+    {
+        delete m_a;
+        delete m_b;
+        delete m_c;
     }
 };
 

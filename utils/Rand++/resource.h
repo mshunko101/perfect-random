@@ -66,6 +66,22 @@
 #define IDC_REMOVE                      2021
 #define IDC_ABOUT_TEXT                  2022
 #define IDC_SHOW_ABOUT                  2023
+#define IDS_QWORD_MC                    2024
+#define IDS_LDOUBLE_MC                  2025
+#define IDC_CONT_U8         2020
+#define IDC_CONT_U16        2021
+#define IDC_CONT_U32        2022
+#define IDC_CONT_U64        2023
+#define IDC_CONT_F32        2024
+#define IDC_CONT_F64        2025
+#define IDC_CONT_F80        2026
+#define IDC_BITS_EDIT       2027
+#define IDC_BITS_SPIN       2028
+#define IDS_BITS_RANGE      1052
+#define IDS_CONTAINER_BITS  1053
+#define IDS_RANGE_INVALID   1054
+
+
 
 #define IDC_STATIC                      -1
 

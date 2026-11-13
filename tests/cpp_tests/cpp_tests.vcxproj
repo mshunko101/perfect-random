@@ -135,8 +135,7 @@
     <ClCompile Include="cpp_tests.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\versions\non-crypto\perfect_random.hpp" />
-    <ClInclude Include="..\..\versions\non-crypto\perfect_random_c.h" />
+    <ClInclude Include="..\..\versions\crypto-non-crypto\perfect_random.hpp" />
     <ClInclude Include="bench_speed.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

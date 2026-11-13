@@ -18,10 +18,7 @@
     <ClInclude Include="bench_speed.h">
       <Filter>Исходные файлы</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\versions\non-crypto\perfect_random.hpp">
-      <Filter>Исходные файлы</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\versions\non-crypto\perfect_random_c.h">
+    <ClInclude Include="..\..\versions\crypto-non-crypto\perfect_random.hpp">
       <Filter>Исходные файлы</Filter>
     </ClInclude>
   </ItemGroup>
