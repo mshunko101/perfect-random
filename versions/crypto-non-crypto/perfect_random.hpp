@@ -106,7 +106,7 @@ private:
     int      counter;
     int      out_idx;
     std::size_t N;
-
+public:
     void step()
     {
         a = (a * MUL_A) % M;
@@ -220,6 +220,35 @@ public:
         return is >> r.a >> r.b >> r.c >> r.counter >> r.out_idx >> r.N;
     }
 };
+
+
+class crypto
+{
+    cascade_prng* m_a;
+    cascade_prng* m_b;
+    cascade_prng* m_c;
+
+public:
+    crypto(uint64_t seed1, uint64_t seed2, uint64_t seed3)
+    {
+        m_a = new cascade_prng(seed1, 48);
+        m_b = new cascade_prng(seed2, 49);
+        m_c = new cascade_prng(seed3, 50);
+    }
+
+    std::uint32_t generate_raw() {
+
+        auto a = m_a->generate_raw();
+        auto b = m_b->generate_raw();
+        auto c = m_c->generate_raw();
+        auto ab = (a + b) / 2;
+        auto ac = (a + c) / 2;
+        auto ca = (a + c) / 2;
+        return ab - ac + ~ca;
+    }
+};
+
+
 
 // ═══════════════════════════════════════════════════════════════
 //  cascade_prng64 — 61-битный каскадный ГПСЧ на простом Мерсенна M_61
