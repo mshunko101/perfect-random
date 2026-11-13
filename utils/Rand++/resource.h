@@ -65,9 +65,9 @@
 #define IDC_IMPORT                      2020
 #define IDC_REMOVE                      2021
 #define IDC_ABOUT_TEXT                  2022
-#define IDC_SHOW_ABOUT                  2023
 #define IDS_QWORD_MC                    2024
 #define IDS_LDOUBLE_MC                  2025
+#define IDC_SHOW_ABOUT                  2077
 #define IDC_CONT_U8         2020
 #define IDC_CONT_U16        2021
 #define IDC_CONT_U32        2022
@@ -80,6 +80,7 @@
 #define IDS_BITS_RANGE      1052
 #define IDS_CONTAINER_BITS  1053
 #define IDS_RANGE_INVALID   1054
+
 
 
 

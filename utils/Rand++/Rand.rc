@@ -29,52 +29,51 @@ CAPTION "О Rand++"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
     ICON            IDR_MAINFRAME,IDC_STATIC,7,86,18,16
-    LTEXT           "Rand++, версия 7.0",IDC_STATIC,35,84,82,8,SS_NOPREFIX
+    LTEXT           "Rand++, версия 8.0",IDC_STATIC,35,84,82,8,SS_NOPREFIX
     LTEXT           "(C) MSHUNKO 2026 г.",IDC_STATIC,33,94,85,8
     EDITTEXT        IDC_ABOUT_TEXT,0,0,227,77,ES_MULTILINE | ES_AUTOHSCROLL | ES_READONLY
     DEFPUSHBUTTON   "ОК",IDOK,177,83,50,18,WS_GROUP
 END
 
-IDD_RAND_DIALOG DIALOGEX 0, 0, 170, 323
+IDD_RAND_DIALOG DIALOGEX 0, 0, 170, 296
 STYLE DS_SETFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 EXSTYLE WS_EX_CONTEXTHELP | WS_EX_APPWINDOW
-CAPTION "Rand++ Версия 7.0"
+CAPTION "Rand++ Версия 8.0"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
-    LTEXT           "τ (период):",IDC_STATIC,15,20,46,8
-    COMBOBOX        IDC_SERIES_PERIOD,66,18,81,80,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Количество чисел:",IDC_STATIC,15,36,60,8
-    COMBOBOX        IDC_SERIES_COUNT,81,33,66,80,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Бит на число:",IDC_STATIC,15,57,50,8
-    EDITTEXT        IDC_BITS_EDIT,80,54,26,14,ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
-    CONTROL         "",IDC_BITS_SPIN,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | WS_TABSTOP,104,54,11,14
-    GROUPBOX        "Контейнер:",IDC_STATIC,15,74,139,42
-    CONTROL         "byte",IDC_CONT_U8,"Button",BS_AUTORADIOBUTTON | WS_GROUP,21,84,30,10
-    CONTROL         "word",IDC_CONT_U16,"Button",BS_AUTORADIOBUTTON,53,84,32,10
-    CONTROL         "dword",IDC_CONT_U32,"Button",BS_AUTORADIOBUTTON,88,84,38,10
-    CONTROL         "qword",IDC_CONT_U64,"Button",BS_AUTORADIOBUTTON,122,84,30,10
-    CONTROL         "float",IDC_CONT_F32,"Button",BS_AUTORADIOBUTTON,21,96,32,10
-    CONTROL         "double",IDC_CONT_F64,"Button",BS_AUTORADIOBUTTON,57,96,42,10
-    CONTROL         "long double",IDC_CONT_F80,"Button",BS_AUTORADIOBUTTON,104,96,46,10
-    GROUPBOX        "Формат файла:",IDC_STATIC,15,120,139,26
-    CONTROL         "Текстовый",IDC_TYPE_TEXT,"Button",BS_AUTORADIOBUTTON | WS_GROUP,21,131,45,10
-    CONTROL         "Бинарный",IDC_TYPE_BINARY,"Button",BS_AUTORADIOBUTTON,80,131,45,10
-    LTEXT           "Минимальное:",IDC_STATIC,15,155,52,8
-    EDITTEXT        IDC_SERIE_MIN,76,152,71,14,ES_AUTOHSCROLL | WS_TABSTOP
-    LTEXT           "Максимальное:",IDC_STATIC,15,174,53,8
-    EDITTEXT        IDC_SERIE_MAX,76,171,71,14,ES_AUTOHSCROLL | WS_TABSTOP
-    LTEXT           "Имя файла:",IDC_STATIC,15,193,42,8
-    EDITTEXT        IDC_SERIE_FILENAME,62,190,85,14,ES_AUTOHSCROLL | WS_TABSTOP
-    GROUPBOX        "Движок:",IDC_STATIC,15,211,139,28
-    COMBOBOX        IDC_ENGINE_LIST,21,221,127,80,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Скорость потока:",IDC_STATIC,15,246,61,8
-    LTEXT           "",IDC_SPEED_LABEL,82,246,61,8
-    CONTROL         "",IDC_PROGRESS_BAR,"msctls_progress32",WS_BORDER,15,258,138,14
-    LTEXT           "",IDC_STATIC_REPORT,15,276,138,10
-    DEFPUSHBUTTON   "СТАРТ",ID_SERIE_GENERATION_START,6,300,50,14
-    PUSHBUTTON      "О нас",IDC_SHOW_ABOUT,70,300,27,14
-    PUSHBUTTON      "Отмена",IDCANCEL,112,300,49,14
-    GROUPBOX        "Параметры ГПСЧ:",IDC_STATIC,7,7,156,290
+    GROUPBOX        "Параметры ГПСЧ:",IDC_STATIC,7,7,156,262
+    LTEXT           "Период τ:",IDC_STATIC,16,16,60,8
+    COMBOBOX        IDC_SERIES_PERIOD,82,14,65,80,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Количество:",IDC_STATIC,16,34,62,8
+    COMBOBOX        IDC_SERIES_COUNT,82,32,66,80,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Движок:",IDC_STATIC,16,52,52,8
+    COMBOBOX        IDC_ENGINE_LIST,75,50,72,120,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Бит на число:",IDC_STATIC,16,70,60,8
+    EDITTEXT        IDC_BITS_EDIT,82,68,40,14,ES_AUTOHSCROLL | ES_NUMBER
+    CONTROL         "",IDC_BITS_SPIN,"msctls_updown32",UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS,120,68,12,14
+    GROUPBOX        "Контейнер:",IDC_STATIC,15,88,139,48,WS_GROUP
+    CONTROL         "byte",IDC_CONT_U8,"Button",BS_AUTORADIOBUTTON | WS_GROUP,24,98,30,10
+    CONTROL         "word",IDC_CONT_U16,"Button",BS_AUTORADIOBUTTON,58,98,32,10
+    CONTROL         "dword",IDC_CONT_U32,"Button",BS_AUTORADIOBUTTON,94,98,36,10
+    CONTROL         "qword",IDC_CONT_U64,"Button",BS_AUTORADIOBUTTON,24,110,36,10
+    CONTROL         "float",IDC_CONT_F32,"Button",BS_AUTORADIOBUTTON,58,110,32,10
+    CONTROL         "double",IDC_CONT_F64,"Button",BS_AUTORADIOBUTTON,94,110,38,10
+    CONTROL         "long double",IDC_CONT_F80,"Button",BS_AUTORADIOBUTTON,24,122,48,10
+    GROUPBOX        "Формат файла:",IDC_STATIC,15,142,139,28
+    CONTROL         "Текстовый",IDC_TYPE_TEXT,"Button",BS_AUTORADIOBUTTON | WS_GROUP,24,154,50,10
+    CONTROL         "Бинарный",IDC_TYPE_BINARY,"Button",BS_AUTORADIOBUTTON,78,154,50,10
+    LTEXT           "Минимальное:",IDC_STATIC,17,178,52,8
+    EDITTEXT        IDC_SERIE_MIN,76,176,71,14,ES_AUTOHSCROLL
+    LTEXT           "Максимальное:",IDC_STATIC,17,196,54,8
+    COMBOBOX        IDC_SERIE_MAX,76,194,71,80,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Имя файла:",IDC_STATIC,17,214,42,8
+    EDITTEXT        IDC_SERIE_FILENAME,69,212,78,14,ES_AUTOHSCROLL
+    LTEXT           "Скорость потока:",IDC_STATIC,16,232,62,8
+    LTEXT           "",IDC_SPEED_LABEL,82,232,61,8
+    CONTROL         "",IDC_PROGRESS_BAR,"msctls_progress32",WS_BORDER,15,246,138,14
+    DEFPUSHBUTTON   "СТАРТ",ID_SERIE_GENERATION_START,6,272,50,14
+    PUSHBUTTON      "О нас",IDC_SHOW_ABOUT,60,272,50,14
+    PUSHBUTTON      "Отмена",IDCANCEL,112,272,49,14
 END
 
 
@@ -102,12 +101,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "mshunko"
             VALUE "FileDescription", "Rand++"
-            VALUE "FileVersion", "7.0.0.0"
+            VALUE "FileVersion", "8.0.0.0"
             VALUE "InternalName", "Rand++.exe"
             VALUE "LegalCopyright", "mshunko ИП 693277645.  Все права защищены."
             VALUE "OriginalFilename", "Rand++.exe"
             VALUE "ProductName", "Rand++"
-            VALUE "ProductVersion", "7.0.0.0"
+            VALUE "ProductVersion", "8.0.0.0"
         END
     END
     BLOCK "VarFileInfo"
@@ -134,7 +133,7 @@ BEGIN
     IDD_RAND_DIALOG, DIALOG
     BEGIN
         RIGHTMARGIN, 169
-        BOTTOMMARGIN, 316
+        BOTTOMMARGIN, 289
     END
 END
 #endif    // APSTUDIO_INVOKED
@@ -191,10 +190,11 @@ BEGIN
     IDS_ABOUTBOX            "&Сведения о Rand++..."
     IDS_MIN_SERIE_COUNT     "Количество чисел должно быть больше 0"
     IDS_MIN_MAX_CONDITION   "min должен быть меньше max"
+    IDS_SERIE_FORMAT        "Формат должен быть 'txt' или 'bin'"
     IDS_FILE_ERROR          "Не удалось открыть файл для записи"
-    IDS_BITS_RANGE          "Ширина бит не соответствует движку: 1..31, для 61-битных — 1..61"
-    IDS_CONTAINER_BITS      "Выбранный контейнер не вмещает заданную ширину бит"
-    IDS_RANGE_INVALID       "Диапазон min/max не соответствует контейнеру"
+    IDS_BITS_RANGE          "Бит на число: допустимо 1..31 (std/crypto 31) или 1..61 (std/crypto 61)"
+    IDS_CONTAINER_BITS      "Выбранный контейнер не вмещает столько бит"
+    IDS_RANGE_INVALID       "Диапазон [min, max] несовместим с контейнером"
 END
 
 #endif    // Русский (Россия) resources
@@ -211,4 +211,3 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
-
