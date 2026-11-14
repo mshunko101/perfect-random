@@ -173,9 +173,11 @@ struct GenParams {
     Container container = Container::U32;
     bool binary_format = true;
     std::wstring filename = L"output.bin";
-    double period = 42.0;
     EngineType engine = EngineType::Std31;
     unsigned long long seed = 0;     // 0 = по времени
+    unsigned long long seed1 = 0;     // 0 = по времени
+    unsigned long long seed2 = 0;     // 0 = по времени
+    unsigned long long seed3 = 0;     // 0 = по времени
 };
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -211,22 +213,19 @@ struct GenWrapper {
     std::unique_ptr<perfect_random::crypto64>        cr61;
     uint32_t ebits = 31;
 
-    GenWrapper(EngineType eng, uint64_t seed, double period) : engine(eng) {
+    GenWrapper(EngineType eng, uint64_t seed, uint64_t seed1, uint64_t seed2, uint64_t seed3) : engine(eng) {
         size_t N = 49;
-        // period -> N: период вращения -> количество шагов в цикле
-        if (period >= 1.0) N = (size_t)period;
 
-        std::uint64_t st = seed | 1;
-        std::uint64_t s1 = SplitMix64(st);
-        std::uint64_t s2 = SplitMix64(st);
-        std::uint64_t s3 = SplitMix64(st);
+        std::uint64_t s1 = seed1;
+        std::uint64_t s2 = seed2;
+        std::uint64_t s3 = seed3;
 
         switch (eng) {
         case EngineType::Std31:
-            g31 = std::make_unique<perfect_random::cascade_prng>(seed, N);
+            g31 = std::make_unique<perfect_random::cascade_prng>(seed);
             break;
         case EngineType::Std61:
-            g61 = std::make_unique<perfect_random::cascade_prng64>(seed, N);
+            g61 = std::make_unique<perfect_random::cascade_prng64>(seed);
             break;
         case EngineType::Crypto31:
             cr31 = std::make_unique<perfect_random::crypto>(s1, s2, s3);
@@ -288,11 +287,9 @@ static bool GenerateCore(const GenParams& p, std::wstring& errMsg,
 
     // Ширина вывода против ширины движка
     const uint32_t ebits = EngineBits(p.engine);
-    if (p.out_bits == 0 || p.out_bits > ebits) { errMsg = L"bits"; return false; }
 
     // Ширина вывода против контейнера
     const uint32_t ccap = ContainerCapBits(p.container);
-    if (p.out_bits > ccap) { errMsg = L"container"; return false; }
 
     // Диапазон против контейнера
     const bool is_int = (int)p.container <= (int)Container::U64;
@@ -311,7 +308,7 @@ static bool GenerateCore(const GenParams& p, std::wstring& errMsg,
     }
 
     uint64_t seed = p.seed ? (uint64_t)p.seed : (uint64_t)time(nullptr);
-    GenWrapper gen(p.engine, seed, p.period);
+    GenWrapper gen(p.engine, seed, p.seed1,p.seed2,p.seed3);
 
     const size_t pull_size = ContainerSize(p.container);
     const size_t updateInterval = (p.serie_count >= 100)
@@ -434,120 +431,6 @@ static bool GenerateCore(const GenParams& p, std::wstring& errMsg,
     return true;
 }
 
-// ── CLI ─────────────────────────────────────────────────────────
-static int RunCLI(int argc, LPWSTR* argv) {
-    GenParams p;
-    bool help = false;
-
-    for (int i = 1; i < argc; ++i) {
-        std::wstring arg = argv[i];
-        auto val = [&]() -> std::wstring {
-            if (i + 1 < argc) return argv[++i];
-            return L"";
-        };
-
-        if (arg == L"-h" || arg == L"--help") { help = true; }
-        else if (arg == L"-n" || arg == L"--count")
-            p.serie_count = wcstoull(val().c_str(), nullptr, 10);
-        else if (arg == L"--min")
-            p.serie_min = wcstold(val().c_str(), nullptr);
-        else if (arg == L"--max")
-            p.serie_max = wcstold(val().c_str(), nullptr);
-        else if (arg == L"-w" || arg == L"--bits")
-            p.out_bits = wcstoul(val().c_str(), nullptr, 10);
-        else if (arg == L"-c" || arg == L"--container") {
-            std::wstring v = val();
-            if      (v == L"byte"  || v == L"8")   p.container = Container::U8;
-            else if (v == L"word"  || v == L"16")  p.container = Container::U16;
-            else if (v == L"dword" || v == L"32")  p.container = Container::U32;
-            else if (v == L"qword" || v == L"64")  p.container = Container::U64;
-            else if (v == L"float" || v == L"f32") p.container = Container::F32;
-            else if (v == L"double"|| v == L"f64") p.container = Container::F64;
-            else if (v == L"long-double" || v == L"ld" || v == L"f80")
-                p.container = Container::F80;
-        }
-        else if (arg == L"-e" || arg == L"--engine") {
-            std::wstring v = val();
-            if      (v == L"std31" || v == L"std" || v == L"cpp")       p.engine = EngineType::Std31;
-            else if (v == L"std61" || v == L"mc"  || v == L"std-mc")    p.engine = EngineType::Std61;
-            else if (v == L"crypto31" || v == L"crypto")                p.engine = EngineType::Crypto31;
-            else if (v == L"crypto61" || v == L"crypto-mc")             p.engine = EngineType::Crypto61;
-        }
-        else if (arg == L"-p" || arg == L"--period") {
-            p.period = wcstod(val().c_str(), nullptr);
-            if (p.period < 1.0) p.period = 42.0;
-        }
-        else if (arg == L"--seed")
-            p.seed = wcstoull(val().c_str(), nullptr, 10);
-        else if (arg == L"-f" || arg == L"--format")
-            p.binary_format = (val() != L"txt");
-        else if (arg == L"-o" || arg == L"--out")
-            p.filename = val();
-    }
-
-    if (help) {
-        std::wcout <<
-            L"Rand++ - генератор псевдослучайных чисел (perfect_random)\n\n"
-            L"  -n, --count N       количество чисел (default: 10000000)\n"
-            L"  --min V             нижняя граница (default: 0)\n"
-            L"  --max V             верхняя граница (default: 4294967295)\n"
-            L"  -w, --bits N        случайных бит на число: 1..31 (std31/crypto31)\n"
-            L"                      или 1..61 (std61/crypto61)\n"
-            L"  -c, --container T   byte | word | dword | qword | float | double |\n"
-            L"                      long-double (default: dword)\n"
-            L"  -e, --engine ENG    std31 | std61 | crypto31 | crypto61\n"
-            L"                      (алиасы: std, mc = std61, crypto = crypto31)\n"
-            L"  -p, --period N      период вращения каскада (default: 42)\n"
-            L"      --seed N        сид (default: текущее время)\n"
-            L"  -f, --format FMT    bin или txt (default: bin)\n"
-            L"  -o, --out FILE      имя файла (default: output.bin)\n"
-            L"  -h, --help          эта справка\n";
-        return 0;
-    }
-
-    // Resolve relative paths
-    if (p.filename.find_first_of(L"\\/:") == std::wstring::npos)
-        p.filename = GetExecutableDirectory() + L"\\" + p.filename;
-
-    std::wcout << L"Generating " << p.serie_count << L" values"
-        << L" (engine=" << EngineToStr(p.engine)
-        << L", bits=" << p.out_bits
-        << L", container=" << ContainerToStr(p.container)
-        << L", format=" << (p.binary_format ? L"bin" : L"txt")
-        << L", period=" << p.period
-        << L") -> " << p.filename << std::endl;
-
-    std::wstring errMsg;
-    auto cliProgress = [](size_t processed, double speed_mbps) {
-        fprintf(stderr, "\r  %zu values  |  %.2f MB/s",
-            processed, speed_mbps);
-        fflush(stderr);
-    };
-
-    if (GenerateCore(p, errMsg, cliProgress)) {
-        fprintf(stderr, "\n");
-        std::wcout << L"Done: " << p.filename << std::endl;
-        return 0;
-    }
-
-    if (errMsg == L"count")
-        std::wcerr << L"Error: count must be > 0" << std::endl;
-    else if (errMsg == L"minmax")
-        std::wcerr << L"Error: min must be < max" << std::endl;
-    else if (errMsg == L"bits")
-        std::wcerr << L"Error: bits must be in 1.." << EngineBits(p.engine) << std::endl;
-    else if (errMsg == L"container")
-        std::wcerr << L"Error: container " << ContainerToStr(p.container)
-                   << L" cannot hold " << p.out_bits << L" bits" << std::endl;
-    else if (errMsg == L"range")
-        std::wcerr << L"Error: [min, max] incompatible with container" << std::endl;
-    else if (errMsg == L"file")
-        std::wcerr << L"Error: cannot open file" << std::endl;
-    else
-        std::wcerr << L"Error: " << errMsg << std::endl;
-    return 1;
-}
-
 // ── Generate thread ─────────────────────────────────────────────
 static void GenerateThread(GenParams* params) {
     HWND hDlg = params->hDlg;
@@ -616,10 +499,7 @@ static std::wstring GetHelpText(int controlId) {
             L"Настройте движок, ширину вывода и контейнер перед запуском.";
 
     case IDC_SERIES_PERIOD:
-        return L"τ — период серии. Количество значений, генерируемых "
-            L"за один проход ГПСЧ. Связан с каскадной моделью: "
-            L"минимум 57, рекомендованный порог 99% — 62.6, "
-            L"оптимальный — равен ОПЖ популяции.";
+        return L"Зерно - seed ";
 
     case IDC_SERIES_COUNT:
         return L"Количество чисел в серии. Определяет, сколько "
@@ -713,29 +593,24 @@ static BOOL OnHelp(WPARAM, LPARAM lParam) {
 // ── UI state: спиннер и доступность контейнеров ─────────────────
 static void UpdateUIState(HWND hDlg) {
     int sel = (int)SendDlgItemMessageW(hDlg, IDC_ENGINE_LIST, CB_GETCURSEL, 0, 0);
-    if (sel < 0) sel = 0;
-    uint32_t ebits = EngineBits((EngineType)sel);
-
-    // Спиннер: 1..ebits
-    SendDlgItemMessageW(hDlg, IDC_BITS_SPIN, UDM_SETRANGE32, 1, (LPARAM)ebits);
-    UINT bits = GetDlgItemInt(hDlg, IDC_BITS_EDIT, nullptr, FALSE);
-    if (bits == 0)                bits = (ebits >= 31) ? 31 : ebits;
-    if (bits > ebits)             bits = ebits;
-    SetDlgItemInt(hDlg, IDC_BITS_EDIT, bits, FALSE);
-
-    // Контейнеры: гасим те, что не вмещают выбранную ширину
-    int firstEnabled = -1;
-    for (int c = 0; c < 7; ++c) {
-        bool en = ContainerCapBits((Container)c) >= bits;
-        EnableWindow(GetDlgItem(hDlg, IDC_CONT_U8 + c), en ? TRUE : FALSE);
-        if (en && firstEnabled < 0) firstEnabled = c;
+    if (sel > 1)
+    {
+        EnableWindow(GetDlgItem(hDlg, IDC_CRYPTO_SEED1), TRUE);
+        EnableWindow(GetDlgItem(hDlg, IDC_CRYPTO_SEED2), TRUE);
+        EnableWindow(GetDlgItem(hDlg, IDC_CRYPTO_SEED3), TRUE);
+        EnableWindow(GetDlgItem(hDlg, IDC_STATIC_CRYPTO1), TRUE);
+        EnableWindow(GetDlgItem(hDlg, IDC_STATIC_CRYPTO2), TRUE);
+        EnableWindow(GetDlgItem(hDlg, IDC_STATIC_CRYPTO3), TRUE);
     }
-    int checked = -1;
-    for (int c = 0; c < 7; ++c)
-        if (IsDlgButtonChecked(hDlg, IDC_CONT_U8 + c) == BST_CHECKED) { checked = c; break; }
-    if (checked < 0 || ContainerCapBits((Container)checked) < bits)
-        CheckRadioButton(hDlg, IDC_CONT_U8, IDC_CONT_F80,
-            IDC_CONT_U8 + (firstEnabled >= 0 ? firstEnabled : 0));
+    else
+    {
+        EnableWindow(GetDlgItem(hDlg, IDC_CRYPTO_SEED1), FALSE);
+        EnableWindow(GetDlgItem(hDlg, IDC_CRYPTO_SEED2), FALSE);
+        EnableWindow(GetDlgItem(hDlg, IDC_CRYPTO_SEED3), FALSE);
+        EnableWindow(GetDlgItem(hDlg, IDC_STATIC_CRYPTO1), FALSE);
+        EnableWindow(GetDlgItem(hDlg, IDC_STATIC_CRYPTO2), FALSE);
+        EnableWindow(GetDlgItem(hDlg, IDC_STATIC_CRYPTO3), FALSE);
+    }
 }
 
 // ── Main dialog ─────────────────────────────────────────────────
@@ -765,7 +640,7 @@ static INT_PTR CALLBACK RandDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
                 reinterpret_cast<LPARAM>(s));
         SendDlgItemMessageW(hDlg, IDC_SERIES_COUNT, CB_SETCURSEL, 3, 0);
 
-        const wchar_t* periods[] = { L"42", L"49", L"57", L"62.6" };
+        const wchar_t* periods[] = { L"40"};
         for (auto s : periods)
             SendDlgItemMessageW(hDlg, IDC_SERIES_PERIOD, CB_ADDSTRING, 0,
                 reinterpret_cast<LPARAM>(s));
@@ -793,7 +668,6 @@ static INT_PTR CALLBACK RandDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
         CheckRadioButton(hDlg, IDC_CONT_U8, IDC_CONT_F80, IDC_CONT_U32);
         SetDlgItemInt(hDlg, IDC_BITS_EDIT, 31, FALSE);
         SetDlgItemTextW(hDlg, IDC_SPEED_LABEL, L"");
-
         UpdateUIState(hDlg);
         return TRUE;
     }
@@ -829,8 +703,16 @@ static INT_PTR CALLBACK RandDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
 
             wchar_t buf[512];
             GetDlgItemTextW(hDlg, IDC_SERIES_PERIOD, buf, 256);
-            p->period = _wtof(buf);
-            if (p->period < 1.0) p->period = 42.0;
+            p->seed = wcstoull(buf, nullptr, 10);
+
+            GetDlgItemTextW(hDlg, IDC_CRYPTO_SEED1, buf, 256);
+            p->seed1 = wcstoull(buf, nullptr, 10);
+
+            GetDlgItemTextW(hDlg, IDC_CRYPTO_SEED1, buf, 256);
+            p->seed2 = wcstoull(buf, nullptr, 10);
+
+            GetDlgItemTextW(hDlg, IDC_CRYPTO_SEED1, buf, 256);
+            p->seed3 = wcstoull(buf, nullptr, 10);
 
             GetDlgItemTextW(hDlg, IDC_SERIES_COUNT, buf, 256);
             p->serie_count = wcstoull(buf, nullptr, 10);
@@ -875,7 +757,7 @@ static INT_PTR CALLBACK RandDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
         return TRUE;
 
     case WM_TASK_COMPLETE:
-        SendDlgItemMessageW(hDlg, IDC_PROGRESS_BAR, PBM_SETPOS, 0, 0);
+        SendDlgItemMessageW(hDlg, IDC_PROGRESS_BAR, PBM_SETPOS, 100, 0);
         SetDlgItemTextW(hDlg, IDC_SPEED_LABEL, L"");
         return TRUE;
 
@@ -928,15 +810,6 @@ static INT_PTR CALLBACK RandDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM l
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
     g_hInstance = hInstance;
 
-    int argc = 0;
-    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-
-    if (argv && argc > 1) {
-        int ret = RunCLI(argc, argv);
-        LocalFree(argv);
-        return ret;
-    }
-    if (argv) LocalFree(argv);
 
     INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_PROGRESS_CLASS };
     InitCommonControlsEx(&icc);
