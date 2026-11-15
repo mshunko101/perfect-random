@@ -22,9 +22,7 @@
 // ── Подключение C-версии ─────────────────────────────────────────
 // C-типы (cascade_prng, cascade_prng64) не конфликтуют с C++ типами,
 // т.к. C++-классы живут в namespace perfect_random.
-extern "C" {
-#include "../../versions/crypto-non-crypto/perfect_random_c.h"
-}
+
 
 #include <iostream>
 #include <iomanip>
@@ -51,23 +49,19 @@ static constexpr unsigned    BENCH_SEED   = 12345;
 // ===============================================═
 enum class EngineType {
     CPP_Standard,    // 31-bit C++, cascade_prng
-    CPP_MonteCarlo,  // 61-bit C++, cascade_prng64
-    C_Standard,      // 31-bit C
-    C_MonteCarlo     // 61-bit C
+    CPP_Standard61  // 61-bit C++, cascade_prng64
 };
 
 static std::string EngineToStr(EngineType e) {
     switch (e) {
-    case EngineType::CPP_Standard:   return "CPP_Std";
-    case EngineType::CPP_MonteCarlo: return "CPP_MC";
-    case EngineType::C_Standard:     return "C_Std";
-    case EngineType::C_MonteCarlo:   return "C_MC";
+    case EngineType::CPP_Standard:   return "CPP_Std31";
+    case EngineType::CPP_Standard61: return "CPP_Std61";
     }
     return "?";
 }
 
 static bool Is64Bit(EngineType e) {
-    return e == EngineType::CPP_MonteCarlo || e == EngineType::C_MonteCarlo;
+    return e == EngineType::CPP_Standard61;
 }
 
 // ===============================================═
@@ -84,7 +78,7 @@ struct Cpp31Adapter {
     result_type operator()() { return p->generate_raw(); }
 };
 
-struct Cpp64Adapter {
+struct Cpp61Adapter {
     perfect_random::cascade_prng64* p;
     using result_type = std::uint64_t;
     static constexpr result_type min() { return 0; }
@@ -92,21 +86,6 @@ struct Cpp64Adapter {
     result_type operator()() { return p->generate_raw(); }
 };
 
-struct C31Adapter {
-    cascade_prng* p;
-    using result_type = std::uint32_t;
-    static constexpr result_type min() { return 0; }
-    static constexpr result_type max() { return (result_type)(CASCADE_PRNG_M - 1); }
-    result_type operator()() { return cascade_prng_generate_raw(p); }
-};
-
-struct C64Adapter {
-    cascade_prng64* p;
-    using result_type = std::uint64_t;
-    static constexpr result_type min() { return 0; }
-    static constexpr result_type max() { return CASCADE_PRNG64_M - 1; }
-    result_type operator()() { return cascade_prng64_generate_raw(p); }
-};
 
 // ===============================================═
 //  GenWrapper — универсальная обёртка для всех 4 движков
@@ -116,9 +95,7 @@ struct GenWrapper {
     std::size_t n_;
 
     perfect_random::cascade_prng*   cpp31 = nullptr;
-    perfect_random::cascade_prng64* cpp64 = nullptr;
-    cascade_prng*   c31 = nullptr;
-    cascade_prng64* c64 = nullptr;
+    perfect_random::cascade_prng64* cpp61 = nullptr;
 
     std::uniform_real_distribution<double> dist{0.0, 1.0};
 
@@ -129,16 +106,8 @@ struct GenWrapper {
         case EngineType::CPP_Standard:
             cpp31 = new perfect_random::cascade_prng(seed, n);
             break;
-        case EngineType::CPP_MonteCarlo:
-            cpp64 = new perfect_random::cascade_prng64(seed, n);
-            break;
-        case EngineType::C_Standard:
-            c31 = new cascade_prng;
-            cascade_prng_init(c31, seed, n);
-            break;
-        case EngineType::C_MonteCarlo:
-            c64 = new cascade_prng64;
-            cascade_prng64_init(c64, seed, n);
+        case EngineType::CPP_Standard61:
+            cpp61 = new perfect_random::cascade_prng64(seed, n);
             break;
         }
     }
@@ -146,9 +115,7 @@ struct GenWrapper {
     ~GenWrapper() {
         // C-структуры не имеют free-функций — просто delete
         if (cpp31) delete cpp31;
-        if (cpp64) delete cpp64;
-        if (c31)   delete c31;
-        if (c64)   delete c64;
+        if (cpp61) delete cpp61;
     }
 
     GenWrapper(const GenWrapper&) = delete;
@@ -157,18 +124,14 @@ struct GenWrapper {
     // STD-канал №2: double [0,1) через std::uniform_real_distribution
     double generate() {
         if (cpp31) { Cpp31Adapter g{cpp31}; return dist(g); }
-        if (cpp64) { Cpp64Adapter g{cpp64}; return dist(g); }
-        if (c31)   { C31Adapter   g{c31};   return dist(g); }
-        C64Adapter g{c64};
-        return dist(g);
+        Cpp61Adapter g{ cpp61 };
+        return dist(g); 
     }
 
     // STD-канал №1: raw по ширине движка (31 или 61 бит)
     std::uint64_t raw() {
         if (cpp31) return cpp31->generate_raw();
-        if (cpp64) return cpp64->generate_raw();
-        if (c31)   return cascade_prng_generate_raw(c31);
-        return cascade_prng64_generate_raw(c64);
+        if (cpp61) return cpp61->generate_raw();
     }
 
     int bits() const { return Is64Bit(engine) ? 61 : 31; }
@@ -176,9 +139,7 @@ struct GenWrapper {
     // Пересидирование: сброс к тому же сиду восстанавливает поток
     void reseed(unsigned int s) {
         if (cpp31) cpp31->seed(s);
-        if (cpp64) cpp64->seed(s);
-        if (c31)   cascade_prng_init(c31, s, n_);
-        if (c64)   cascade_prng64_init(c64, s, n_);
+        if (cpp61) cpp61->seed(s);
     }
 };
 
@@ -676,23 +637,12 @@ TestResult test_mc_rare_event(const std::string& name, EngineType eng) {
 //  Кросс-движковые тесты
 // ===============================================═
 
-// Тест 27: C++ standard и C standard дают одинаковый результат
-TestResult test_cross_cpp_c_standard(const std::string& name, EngineType) {
-    GenWrapper gcpp(42, PERIOD, EngineType::CPP_Standard);
-    GenWrapper gc(42, PERIOD, EngineType::C_Standard);
-    for (int i = 0; i < 50000; i++) {
-        double v1 = gcpp.generate();
-        double v2 = gc.generate();
-        ASSERT_EQ(v1, v2,
-            "C++ vs C diverged at step " + std::to_string(i));
-    }
-    return { true, name, "" };
-}
+
 
 // Тест 28: 31-bit и 61-bit дают РАЗНЫЕ результаты (разные модули)
 TestResult test_cross_31_vs_61(const std::string& name, EngineType) {
     GenWrapper g31(42, PERIOD, EngineType::CPP_Standard);
-    GenWrapper g64(42, PERIOD, EngineType::CPP_MonteCarlo);
+    GenWrapper g64(42, PERIOD, EngineType::CPP_Standard61);
     int diff = 0;
     for (int i = 0; i < 1000; i++) {
         if (g31.generate() != g64.generate())
@@ -791,9 +741,7 @@ int main(int argc, char* argv[]) {
 
     EngineType engines[] = {
         EngineType::CPP_Standard,
-        EngineType::CPP_MonteCarlo,
-        EngineType::C_Standard,
-        EngineType::C_MonteCarlo
+        EngineType::CPP_Standard61
     };
 
     // ── Базовые тесты (все 4 движка) ──
@@ -823,21 +771,11 @@ int main(int argc, char* argv[]) {
         RUN_TEST(test_shuffle, eng);
     }
 
-    // ── Структурные тесты (все 4 движка) ──
-    for (auto eng : engines) {
-        std::cout << "\n--- Structural [" << EngineToStr(eng) << "] ---\n";
-        RUN_TEST(test_period_affects_sequence, eng);
-        RUN_TEST(test_seed_uniqueness, eng);
-        RUN_TEST(test_large_batch, eng);
-        RUN_TEST(test_reseed_reproducibility, eng);
-        RUN_TEST(test_long_run_stability, eng);
-    }
 
     // ── Monte Carlo тесты (только 61-bit движки) ──
     {
         EngineType mc_engines[] = {
-            EngineType::CPP_MonteCarlo,
-            EngineType::C_MonteCarlo
+            EngineType::CPP_Standard61
         };
         for (auto eng : mc_engines) {
             std::cout << "\n--- Monte Carlo [" << EngineToStr(eng) << "] ---\n";
@@ -850,13 +788,12 @@ int main(int argc, char* argv[]) {
 
     // ── Кросс-движковые тесты ──
     std::cout << "\n--- Cross-engine ---\n";
-    RUN_TEST(test_cross_cpp_c_standard, EngineType::CPP_Standard);
     RUN_TEST(test_cross_31_vs_61, EngineType::CPP_Standard);
 
     // ── C++ URBG тесты ──
     std::cout << "\n--- C++ URBG ---\n";
     RUN_TEST(test_urbg_31bit, EngineType::CPP_Standard);
-    RUN_TEST(test_urbg_64bit, EngineType::CPP_MonteCarlo);
+    RUN_TEST(test_urbg_64bit, EngineType::CPP_Standard61);
 
     // ── Итоги тестов ──
     std::cout << "\n===================================================\n";

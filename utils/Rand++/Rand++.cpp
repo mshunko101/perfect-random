@@ -571,6 +571,12 @@ static std::wstring GetHelpText(int controlId) {
 
     case IDC_SHOW_ABOUT:
         return L"Сведения о программе и авторе.";
+    case IDC_CRYPTO_SEED1:
+        return L"Зерно 1 из 3 для режима крипто";
+    case IDC_CRYPTO_SEED2:
+        return L"Зерно 2 из 3 для режима крипто";
+    case IDC_CRYPTO_SEED3:
+        return L"Зерно 3 из 3 для режима крипто";
     }
     return L"";
 }
