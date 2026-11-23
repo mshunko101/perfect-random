@@ -1,7 +1,9 @@
 # perfect_random.hpp
 
 ![Логотип](perfect_random_logo.jpeg)
+
 Каскадный генератор псевдослучайных чисел на простых Мерсенна в одном заголовочном файле.
+
 MSHUNKO 2026 © Шунько Михаил Геннадьевич.
 
 ![C/C++](https://img.shields.io/badge/C%20%7C%20C%2B%2B-99%20%7C%2017-blue.svg)
@@ -11,11 +13,11 @@ MSHUNKO 2026 © Шунько Михаил Геннадьевич.
 [![Release](https://img.shields.io/github/v/release/MSHUNKO101/perfect_random)](https://github.com/MSHUNKO101/perfect_random/releases)
 [![License](https://img.shields.io/github/license/MSHUNKO101/perfect_random)](LICENSE)
 
-| Класс            | Поле            | Состояние | Вывод                       | Назначение                          |
-|------------------|-----------------|-----------|-----------------------------|-------------------------------------|
-| `cascade_prng`   | \(M_{31}=2^{31}-1\) | ~183 бита | `uint32_t` в [0, 2³¹−2] | общий случай, генерация индексов    |
-| `cascade_prng64` | \(M_{61}=2^{61}-1\) | ~183 бита | `uint64_t` в [0, 2⁶¹−2] | Монте-Карло высокой точности        |
-| `crypto`         | —               | 3 движка  | `uint32_t`                  | экспериментальная комбинированная схема (см. «Оговорки») |
+| Класс            | Поле         | Состояние | Вывод                    | Назначение                              |
+|------------------|--------------|-----------|--------------------------|-----------------------------------------|
+| `cascade_prng`   | M₃₁ = 2³¹ − 1 | ~183 бита | `uint32_t` в [0, 2³¹−2] | общий случай, генерация индексов        |
+| `cascade_prng64` | M₆₁ = 2⁶¹ − 1 | ~183 бита | `uint64_t` в [0, 2⁶¹−2] | Монте-Карло высокой точности            |
+| `crypto`         | —            | 3 движка  | `uint32_t`               | экспериментальная комбинированная схема (см. «Оговорки») |
 
 ## Идея
 
@@ -31,11 +33,12 @@ c ← c² + a + b mod M
 
 **Честная урезка.** Вывод укладывается в ячейку ровно той ширины, которую даёт поле: 31 бит у `cascade_prng` и 61 бит у `cascade_prng64`. Никакого финалайзера, миксера и расширения вывода — что сгенерировано, то и выдано. `min()`/`max()` отражают фактический диапазон: значения выше `M−1` недостижимы, `0` достижим.
 
-<details><summary>Исток: три уравнения, из которых вырос каскад</summary>
+<details>
+<summary>Исток: три уравнения, из которых вырос каскад</summary>
 
-Константы `A = 5/9` и `B = 5/3` не выбраны — они читаются из трёх систем на трёх величинах: \(x_1\) — Сила, \(x_2\) — Форма, \(x_3\) — Энергия.
+Константы `A = 5/9` и `B = 5/3` не выбраны — они читаются из трёх систем на трёх величинах: x₁ — Сила, x₂ — Форма, x₃ — Энергия.
 
-**ПОРОЖДЕНИЕ** — единственное решение \(\left(-3,\;-\dfrac12,\;-\dfrac52\right)\):
+**ПОРОЖДЕНИЕ** — единственное решение (−3, −1/2, −5/2):
 
 $$
 \begin{cases}
@@ -45,7 +48,7 @@ x_3 - (x_2 + x_1) = 1
 \end{cases}
 $$
 
-**ЗАБВЕНИЕ и СМЕРТЬ** — две ветви одного семейства с параметром \(t = x_1 + x_2\):
+**ЗАБВЕНИЕ и СМЕРТЬ** — две ветви одного семейства с параметром t = x₁ + x₂:
 
 $$
 \frac{1}{2}x_1 + 2x_2 = \frac{x_3}{x_1 + x_2} = x_1 + x_2 = t
@@ -53,19 +56,18 @@ $$
 (x_1,\; x_2,\; x_3) = \left(\frac{2t}{3},\; \frac{t}{3},\; t^2\right)
 $$
 
-- \(t = -2{,}5\) — ЗАБВЕНИЕ: \(\left(-\dfrac53,\;-\dfrac56,\;\dfrac{25}{4}\right)\);
-- \(t = -1\) — СМЕРТЬ: \(\left(-\dfrac23,\;-\dfrac13,\;1\right)\) — **координаты внешнего источника**.
+- t = −2,5 — ЗАБВЕНИЕ: x₁ = −5/3, x₂ = −5/6, x₃ = 25/4;
+- t = −1 — СМЕРТЬ: x₁ = −2/3, x₂ = −1/3, x₃ = 1 — **координаты внешнего источника**.
 
 Отсюда константы каскада:
 
 ```text
-Смерть:  x₁ : x₂ = 2 : 1        → доли 2/3 и 1/3 (отображение 2/3)
-Забвение: |x₁| = 5/3           → константа B = 5/3
-A = (1/3)·(5/3) = 5/9          → константа A = 5/9
+Смерть:   x₁ : x₂ = 2 : 1   → доли 2/3 и 1/3 (отображение 2/3)
+Забвение: |x₁| = 5/3        → константа B = 5/3
+A = (1/3)·(5/3) = 5/9       → константа A = 5/9
 ```
 
-Точка СМЕРТИ — единственная из трёх, где сумма координат равна нулю:
-\(-\frac{2}{3} - \frac{1}{3} + 1 = 0\). Источник — нулевое состояние, из которого каскад разворачивается; параметр \(t\) играет роль фазы каскадного цикла.
+Точка СМЕРТИ — единственная из трёх, где сумма координат равна нулю: −2/3 − 1/3 + 1 = 0. Источник — нулевое состояние, из которого каскад разворачивается; параметр t играет роль фазы каскадного цикла.
 
 Символическая связь: значения получены из уравнений, константы совпадают с ними численно; это легенда проекта, а не математический вывод свойств генератора.
 
@@ -134,13 +136,13 @@ template <class SeedSeq> void seed(const SeedSeq& seq);
 
 ### Генерация
 
-| Метод                        | Возвращаемое значение                     |
-|------------------------------|-------------------------------------------|
-| `operator()`                 | сырой вывод: `uint32_t` / `uint64_t`      |
-| `generate_raw()`             | то же, явно                               |
-| `generate()`                 | `double` в [0, 1)                         |
-| `generate_raw_block(dst, n)` | заполнить массив `n` сырыми значениями    |
-| `discard(z)`                 | пропустить `z` значений состояния         |
+| Метод                        | Возвращаемое значение                  |
+|------------------------------|----------------------------------------|
+| `operator()`                 | сырой вывод: `uint32_t` / `uint64_t`   |
+| `generate_raw()`             | то же, явно                            |
+| `generate()`                 | `double` в [0, 1)                      |
+| `generate_raw_block(dst, n)` | заполнить массив `n` сырыми значениями |
+| `discard(z)`                 | пропустить `z` значений состояния      |
 
 ### Состояние
 
@@ -167,7 +169,7 @@ assert(g == h);
 
 - **Не криптографический.** Название класса `crypto` не означает криптостойкость: рекуррентности мультипликативные и по структуре обратимы, выходные значения детерминированно восстанавливаются из состояния. Для криптографических задач используйте `std::random_device`, ChaCha20 и стандартные примитивы.
 - **`crypto` — экспериментальный класс.** Комбинирует вывод трёх движков с разными `N` (48/49/50); при этом третья компонента (`ca`) дублирует вторую (`ac`), а деление на 2 выполняется в обычной, а не модулярной арифметике. Поведение может измениться в следующих версиях — не закладывайтесь на него в коде, который должен жить долго.
-- **Статистика не сертифицирована.** Перед использованием в чувствительных задачах прогоните движок через TestU01 (Crush/BigCrush) или PractRand. Гарантий качества, сопоставимого с `std::mt19937_64` или xoshiro256**, нет — проверяйте под свою нагрузку.
+- **Статистика не сертифицирована.** Перед использованием в чувствительных задачах прогоните движок через TestU01 (Crush/BigCrush) или PractRand. Гарантий качества, сопоставимого с `std::mt19937_64` или `xoshiro256**`, нет — проверяйте под свою нагрузку.
 - `double` из `generate()` у `cascade_prng` имеет разрешение 31 бит (~9 знаков после запятой); для Монте-Карло используйте `cascade_prng64`.
 
 ## Сборка примеров
@@ -187,26 +189,18 @@ cl /std:c++20 /O2 /I. main.cpp
 
 **MSHUNKO 2026 © Шунько Михаил Геннадьевич.**
 
-<details><summary>Исследования и публикации</summary>
+<details>
+<summary>Исследования и публикации</summary>
 
-[1. Оценка вероятности покрытия мишеней методом Монте-Карло.](https://engee.com/community/ru/catalogs/projects/otsenka-veroiatnosti-pokrytiia-mishenei-metodom-monte-karlo)
-
-[2. Двумерная структура отображения 2/3: каскад и симметрия](https://engee.com/community/ru/catalogs/projects/dvumernaia-struktura-otobrazheniia-2-3-kaskad-i-simmetriia)
-
-[3. Трёхтактный цикл 4/9: самосогласованность и точный возврат](https://engee.com/community/ru/catalogs/projects/trekhtaktnyi-tsikl-4-9-samosoglasovannost-i-tochnyi-vozvrat)
-
-[4. Каскадная развёртка из неустойчивого истока: фазы и спектр](https://engee.com/community/ru/catalogs/projects/kaskadnaia-razvertka-iz-neustoichivogo-istoka-fazy-i-spektr)
-
-[5. Каскадный каркас: от субстрата к сознанию через один каскад](https://engee.com/community/ru/catalogs/projects/kaskadnyi-karkas-ot-substrata-k-soznaniu-cherez-odin-kaskad)
-
-[6. Многочастичная симуляция стабильности кластеров](https://engee.com/community/ru/catalogs/projects/mnogochastichnaia-simuliatsiia-stabilnosti-klasterov)
-
-[7. Шаг 50: орбита Земли, число Авогадро и граница стабильности](https://engee.com/community/ru/catalogs/projects/shag-50-orbita-zemli-chislo-avogadro-i-granitsa-stabilnosti)
-
-[8. Каскад и ОТО: ζ-порог как механизм замедления времени](https://engee.com/community/ru/catalogs/projects/kaskad-i-oto-z-porog-kak-mekhanizm-zamedleniia-vremeni)
-
-[8a. ζ-каскад: торможение и потеря формы](https://engee.com/community/ru/catalogs/projects/z-kaskad-tormozhenie-i-poteria-formy)
-
-[9. Каскадная геометрия и акустика Горькова, в точке «Солнце»](https://engee.com/community/ru/catalogs/projects/kaskadnaia-geometriia-i-akustika-gorkova-v-tochke-solntse)
+1. [Оценка вероятности покрытия мишеней методом Монте-Карло](https://engee.com/community/ru/catalogs/projects/otsenka-veroiatnosti-pokrytiia-mishenei-metodom-monte-karlo)
+2. [Двумерная структура отображения 2/3: каскад и симметрия](https://engee.com/community/ru/catalogs/projects/dvumernaia-struktura-otobrazheniia-2-3-kaskad-i-simmetriia)
+3. [Трёхтактный цикл 4/9: самосогласованность и точный возврат](https://engee.com/community/ru/catalogs/projects/trekhtaktnyi-tsikl-4-9-samosoglasovannost-i-tochnyi-vozvrat)
+4. [Каскадная развёртка из неустойчивого истока: фазы и спектр](https://engee.com/community/ru/catalogs/projects/kaskadnaia-razvertka-iz-neustoichivogo-istoka-fazy-i-spektr)
+5. [Каскадный каркас: от субстрата к сознанию через один каскад](https://engee.com/community/ru/catalogs/projects/kaskadnyi-karkas-ot-substrata-k-soznaniu-cherez-odin-kaskad)
+6. [Многочастичная симуляция стабильности кластеров](https://engee.com/community/ru/catalogs/projects/mnogochastichnaia-simuliatsiia-stabilnosti-klasterov)
+7. [Шаг 50: орбита Земли, число Авогадро и граница стабильности](https://engee.com/community/ru/catalogs/projects/shag-50-orbita-zemli-chislo-avogadro-i-granitsa-stabilnosti)
+8. [Каскад и ОТО: ζ-порог как механизм замедления времени](https://engee.com/community/ru/catalogs/projects/kaskad-i-oto-z-porog-kak-mekhanizm-zamedleniia-vremeni)
+9. [ζ-каскад: торможение и потеря формы](https://engee.com/community/ru/catalogs/projects/z-kaskad-tormozhenie-i-poteria-formy)
+10. [Каскадная геометрия и акустика Горькова, в точке «Солнце»](https://engee.com/community/ru/catalogs/projects/kaskadnaia-geometriia-i-akustika-gorkova-v-tochke-solntse)
 
 </details>
