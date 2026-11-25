@@ -1,13 +1,22 @@
-﻿// perfect_random.hpp
+// perfect_random.hpp
 // MSHUNKO 2026 © Шунько Михаил Геннадьевич.
 // Каскадный ГПСЧ на простых Мерсенна: cascade_prng (M_31) и cascade_prng64 (M_61).
 // Честная урезка: вывод укладывается в ячейку ровно той ширины, которую
 // даёт генератор — 31 бит у cascade_prng и 61 бит у cascade_prng64.
 // Никакого финалайзера, миксера и расширения вывода — что сгенерировано,
 // то и выдано. Границы min()/max() отражают фактический диапазон.
+//
+// Поддерживаемые компиляторы: MSVC 2013 (1800) ... MSVC 2026 (1950), GCC, Clang.
+// Что подставляется на старых MSVC:
+//   VS2013: нет constexpr            -> PR_CONSTEXPR / PR_CONSTVAR
+//           нет enable_if_t/void_t   -> std::enable_if<...>::type, свой детект
+//           нет expression SFINAE    -> детект SeedSequence через sizeof
+//           нет __int128             -> переносимый резерв 128-битного умножения
+// Все флаги PR_* можно переопределить извне (-DPR_HAS_CONSTEXPR=0 и т.д.).
+//
 // Современный C++ интерфейс:
 //   - UniformRandomBitGenerator / std::uniform_random_bit_generator (C++20)
-//   - поддержка SeedSequence (std::seed_seq и любая своя последовательность)
+//   - поддержка SeedSequence (std::seed_seq и любая совместимая последовательность)
 //   - потоковая сериализация состояния (operator<< / operator>>)
 //   - discard(n), блочная генерация, сравнение состояний
 // Полностью автономен — внешних зависимостей нет.
@@ -22,7 +31,7 @@
 //   std::seed_seq seq{1, 2, 3, 4, 5};
 //   perfect_random::cascade_prng gs(seq);         // сидирование последовательностью
 //
-//   g.discard(1'000'000);                         // пропуск значений
+//   g.discard(1000000);                           // пропуск значений
 //   std::uint32_t buf[64]; g.generate_raw_block(buf, 64);
 //   std::cout << g;                               // сохранение состояния
 //
@@ -42,33 +51,113 @@
 #include <iostream>
 #include <limits>
 #include <type_traits>
+#include <memory>
 #undef min
 #undef max
 
-#if defined(__SIZEOF_INT128__) || defined(__int128)
-    #define PR_HAS_INT128 1
+// ─── Поколение компилятора / фичи ──────────────────────────────
+// Все флаги переопределяемы снаружи: -DPR_HAS_CONSTEXPR=0 и т.п.
+#ifndef PR_MSVC_VER
+#  if defined(_MSC_VER)
+#    define PR_MSVC_VER _MSC_VER
+#  else
+#    define PR_MSVC_VER 0
+#  endif
+#endif
+
+#ifndef PR_LANG   // старые MSVC всегда пишут в __cplusplus значение 199711L
+#  if defined(_MSVC_LANG)
+#    define PR_LANG _MSVC_LANG
+#  else
+#    define PR_LANG __cplusplus
+#  endif
+#endif
+
+// 1800=VS2013, 1900=VS2015, 1910=VS2017, 1920=VS2019, 1930=VS2022, 1950=VS2026
+#ifndef PR_HAS_CONSTEXPR   // constexpr в VS2013 был только в ноябрьском CTP
+#  if PR_MSVC_VER == 0 || PR_MSVC_VER >= 1900   // не-MSVC: по полноценному C++11
+#    define PR_HAS_CONSTEXPR 1
+#  else
+#    define PR_HAS_CONSTEXPR 0
+#  endif
+#endif
+
+#ifndef PR_HAS_INT128
+#  if defined(__SIZEOF_INT128__)
+#    define PR_HAS_INT128 1
+#  elif PR_MSVC_VER >= 1930   // MSVC получил __int128 к VS2022 (консервативный порог)
+#    define PR_HAS_INT128 1
+#  else
+#    define PR_HAS_INT128 0
+#  endif
+#endif
+
+#if PR_HAS_CONSTEXPR
+#  define PR_CONSTEXPR constexpr
+#  define PR_CONSTVAR  constexpr
 #else
-    #define PR_HAS_INT128 0
+#  define PR_CONSTEXPR
+#  define PR_CONSTVAR  const
 #endif
 
 namespace perfect_random {
 
-// ─── Распознавание SeedSequence ────────────────────────────────
-// Тип считается SeedSequence, если у него есть generate(Iterator, Iterator)
-// и он не арифметический (чтобы обычный сид uint64_t продолжал работать).
+// ─── Распознавание SeedSequence (совместимо с VS2013) ──────────
+// VS2013 не поддерживает expression SFINAE: decltype(std::declval<T&>().foo)
+// даёт жёсткую ошибку C2228 вместо тихого отсева кандидата. Поэтому детект
+// построен на sizeof и границе массива — технике, работающей на всех
+// поколениях MSVC (её же используют Boost.TypeTraits старых версий).
 namespace detail {
 
-template <class T, class = void>
-struct has_generate : std::false_type {};
+#if PR_MSVC_VER && PR_MSVC_VER < 1900
+
+// VS2013: грубый, но безопасный фильтр — SeedSequence может быть только
+// классовым типом (арифметика отсекается; сам cascade_prng отсекается
+// копирующим конструктором). Вызов generate() происходит в момент
+// инстанцирования: передача неподходящего класса даст внятную ошибку
+// компиляции, а не тихое неверное поведение.
+template <class T>
+struct is_seed_sequence
+    : std::integral_constant<bool,
+          std::is_class<typename std::remove_reference<T>::type>::value> {};
+
+#else
 
 template <class T>
-struct has_generate<T, std::void_t<decltype(std::declval<T&>().generate(
-        std::declval<std::uint32_t*>(), std::declval<std::uint32_t*>()))>>
-    : std::true_type {};
+struct has_generate {
+private:
+    typedef char yes;
+    struct no { char pad[2]; };
+
+    template <class U>
+    static yes test(char (*)[sizeof(
+        ((((U*)0)->generate((std::uint32_t*)0, (std::uint32_t*)0)),
+         char(0)))]);
+    template <class>
+    static no& test(...);
+
+public:
+    // cv-квалификатор снимаем: у std::seed_seq::generate по стандарту
+    // нет const, но логически он константен — const-ссылку обрабатывает
+    // call_generate (см. ниже), а детект не должен отсеивать const-тип.
+    static const bool value = sizeof(test<typename std::remove_cv<
+        typename std::remove_reference<T>::type>::type>(0)) == sizeof(yes);
+};
 
 template <class T>
-inline constexpr bool is_seed_sequence_v =
-    detail::has_generate<T>::value && !std::is_arithmetic<T>::value;
+struct is_seed_sequence
+    : std::integral_constant<bool,
+          has_generate<T>::value && !std::is_arithmetic<T>::value> {};
+
+#endif
+
+// std::seed_seq::generate по стандарту не const, но состояния не меняет;
+// const_cast (со снятием cv самого типа) позволяет передавать и const
+// seed_seq&, как это делали интерфейсы исходной версии файла.
+template <class SeedSeq, class It>
+inline void call_generate(SeedSeq& seq, It b, It e) {
+    const_cast<typename std::remove_const<SeedSeq>::type&>(seq).generate(b, e);
+}
 
 // Сворачивание 32-битной SeedSequence в 64-битное состояние.
 inline std::uint64_t fold_seed_seq(const std::uint32_t* first, const std::uint32_t* last) {
@@ -91,16 +180,16 @@ class cascade_prng
 {
 public:
     // Интерфейс C++ UniformRandomBitGenerator
-    using result_type = std::uint32_t;
-    static constexpr std::uint64_t M = 2147483647ULL;   // 2^31 - 1
+    typedef std::uint32_t result_type;
+    static PR_CONSTVAR std::uint64_t M = 2147483647ULL;   // 2^31 - 1
 
     // Честная урезка: 0 достижим, значит min() = 0
-    static constexpr result_type min() { return 0; }
-    static constexpr result_type max() { return static_cast<result_type>(M - 1); }
+    static PR_CONSTEXPR result_type min() { return 0; }
+    static PR_CONSTEXPR result_type max() { return static_cast<result_type>(M - 1); }
 
 private:
-    static constexpr std::uint64_t MUL_A = 954437177ULL;   // 5/9 mod M
-    static constexpr std::uint64_t MUL_B = 715827884ULL;   // 5/3 mod M
+    static PR_CONSTVAR std::uint64_t MUL_A = 954437177ULL;   // 5/9 mod M
+    static PR_CONSTVAR std::uint64_t MUL_B = 715827884ULL;   // 5/3 mod M
 
     std::uint64_t a, b, c;
     int      counter;
@@ -145,10 +234,12 @@ public:
         seed(s);
     }
 
-    // SeedSequence (std::seed_seq и любой совместимый тип)
+    // SeedSequence (std::seed_seq и любой совместимый тип).
+    // Принимается и lvalue, и rvalue: std::seed_seq некопируем.
     template <class SeedSeq,
-              class = std::enable_if_t<detail::is_seed_sequence_v<SeedSeq>>>
-    explicit cascade_prng(const SeedSeq& seq, std::size_t n = 49)
+              class = typename std::enable_if<detail::is_seed_sequence<
+                  typename std::remove_reference<SeedSeq>::type>::value>::type>
+    explicit cascade_prng(SeedSeq&& seq, std::size_t n = 49)
         : counter(0), out_idx(0), N(n < 1 ? 1 : n)
     {
         seed(seq);
@@ -161,10 +252,11 @@ public:
     }
 
     template <class SeedSeq,
-              class = std::enable_if_t<detail::is_seed_sequence_v<SeedSeq>>>
-    void seed(const SeedSeq& seq) {
+              class = typename std::enable_if<detail::is_seed_sequence<
+                  typename std::remove_reference<SeedSeq>::type>::value>::type>
+    void seed(SeedSeq&& seq) {
         std::uint32_t buf[6];
-        seq.generate(buf, buf + 6);
+        detail::call_generate(seq, buf, buf + 6);
         seed_standard(detail::fold_seed_seq(buf, buf + 6));
         counter = 0;
         out_idx = 0;
@@ -224,26 +316,24 @@ public:
 
 class crypto
 {
-    cascade_prng* m_a;
-    cascade_prng* m_b;
-    cascade_prng* m_c;
+    std::unique_ptr<cascade_prng> m_a;
+    std::unique_ptr<cascade_prng> m_b;
+    std::unique_ptr<cascade_prng> m_c;
 
 public:
-    crypto(uint64_t seed1, uint64_t seed2, uint64_t seed3)
-    {
-        m_a = new cascade_prng(seed1, 48);
-        m_b = new cascade_prng(seed2, 49);
-        m_c = new cascade_prng(seed3, 50);
-    }
+    crypto(std::uint64_t seed1, std::uint64_t seed2, std::uint64_t seed3)
+        : m_a(new cascade_prng(seed1, 48)),
+          m_b(new cascade_prng(seed2, 49)),
+          m_c(new cascade_prng(seed3, 50))
+    {}
 
     std::uint32_t generate_raw() {
-
-        auto a = m_a->generate_raw();
-        auto b = m_b->generate_raw();
-        auto c = m_c->generate_raw();
-        auto ab = (a + b) / 2;
-        auto ac = (a + c) / 2;
-        auto ca = ~((a + c) / 2);
+        std::uint32_t a  = m_a->generate_raw();
+        std::uint32_t b  = m_b->generate_raw();
+        std::uint32_t c  = m_c->generate_raw();
+        std::uint32_t ab = (a + b) / 2;
+        std::uint32_t ac = (a + c) / 2;
+        std::uint32_t ca = ~((a + c) / 2);
         return ab - ac + ca;
     }
 
@@ -251,11 +341,7 @@ public:
     crypto& operator=(const crypto&) = delete;
 
     virtual ~crypto()
-    {
-        delete m_a;
-        delete m_b;
-        delete m_c;
-    }
+    {}
 };
 
 
@@ -270,16 +356,16 @@ class cascade_prng64
 {
 public:
     // Интерфейс C++ UniformRandomBitGenerator
-    using result_type = std::uint64_t;
-    static constexpr std::uint64_t M = 2305843009213693951ULL;  // 2^61 - 1
+    typedef std::uint64_t result_type;
+    static PR_CONSTVAR std::uint64_t M = 2305843009213693951ULL;  // 2^61 - 1
 
     // Честная урезка: значения выше M-1 недостижимы, max() = M-1
-    static constexpr result_type min() { return 0; }
-    static constexpr result_type max() { return static_cast<result_type>(M - 1); }
+    static PR_CONSTEXPR result_type min() { return 0; }
+    static PR_CONSTEXPR result_type max() { return static_cast<result_type>(M - 1); }
 
 private:
-    static constexpr std::uint64_t MUL_A = 0x0E38E38E38E38E39ULL;  // 5/9 mod M
-    static constexpr std::uint64_t MUL_B = 0x0AAAAAAAAAAAAAACULL;  // 5/3 mod M
+    static PR_CONSTVAR std::uint64_t MUL_A = 0x0E38E38E38E38E39ULL;  // 5/9 mod M
+    static PR_CONSTVAR std::uint64_t MUL_B = 0x0AAAAAAAAAAAAAACULL;  // 5/3 mod M
 
     std::uint64_t a, b, c;
     int      counter;
@@ -290,20 +376,25 @@ private:
 #if PR_HAS_INT128
         return static_cast<std::uint64_t>((static_cast<__uint128_t>(x) * y) % M);
 #else
-        // Резерв для MSVC: умножение через разложение по 32-битным половинам
-        std::uint64_t x_lo = x & 0xFFFFFFFF, x_hi = x >> 32;
-        std::uint64_t y_lo = y & 0xFFFFFFFF, y_hi = y >> 32;
-        std::uint64_t lo  = x_lo * y_lo;
-        std::uint64_t mid = x_lo * y_hi + x_hi * y_lo;
-        std::uint64_t hi  = x_hi * y_hi;
-        std::uint64_t mid_lo = mid << 32;
-        std::uint64_t mid_hi = mid >> 32;
-        std::uint64_t r_lo = lo + mid_lo;
-        std::uint64_t carry = (r_lo < lo) ? 1 : 0;
-        std::uint64_t r_hi = hi + mid_hi + carry;
-        // M = 2^61 - 1, значит 2^64 mod M = 8
-        std::uint64_t t = (r_hi * 8 + r_lo) % M;
-        return t;
+        // Резерв для MSVC без __int128 (VS2013..VS2019, 32-битные сборки):
+        // 128-битное произведение через 32-битные половины.
+        // Важно: сначала редуцируем операнды по модулю M (< 2^61). Тогда все
+        // промежуточные суммы помещаются в uint64 без переполнения — старая
+        // версия переполнялась на (r_hi * 8 + r_lo) и молча съезжала на 8.
+        x %= M;
+        y %= M;
+        const std::uint64_t x_lo = x & 0xFFFFFFFFULL, x_hi = x >> 32;
+        const std::uint64_t y_lo = y & 0xFFFFFFFFULL, y_hi = y >> 32;
+        const std::uint64_t lo  = x_lo * y_lo;               // < 2^64
+        const std::uint64_t mid = x_lo * y_hi + x_hi * y_lo; // < 2^62
+        const std::uint64_t hi  = x_hi * y_hi;               // < 2^58
+        const std::uint64_t r_lo  = lo + (mid << 32);
+        const std::uint64_t carry = (r_lo < lo) ? 1ULL : 0ULL;
+        const std::uint64_t r_hi  = hi + (mid >> 32) + carry; // < 2^59
+        // p = r_hi * 2^64 + r_lo; по модулю M: 2^64 ≡ 8, 2^61 ≡ 1
+        const std::uint64_t l1 = r_lo >> 61;                  // < 8
+        const std::uint64_t l0 = r_lo & M;                    // < 2^61
+        return ((r_hi * 8) % M + l1 + l0) % M;                // сумма < 2^62.01
 #endif
     }
 
@@ -343,10 +434,11 @@ public:
         seed(s);
     }
 
-    // SeedSequence (std::seed_seq и любой совместимый тип)
+    // SeedSequence (std::seed_seq и любой совместимый тип).
     template <class SeedSeq,
-              class = std::enable_if_t<detail::is_seed_sequence_v<SeedSeq>>>
-    explicit cascade_prng64(const SeedSeq& seq, std::size_t n = 49)
+              class = typename std::enable_if<detail::is_seed_sequence<
+                  typename std::remove_reference<SeedSeq>::type>::value>::type>
+    explicit cascade_prng64(SeedSeq&& seq, std::size_t n = 49)
         : counter(0), out_idx(0), N(n < 1 ? 1 : n)
     {
         seed(seq);
@@ -359,10 +451,11 @@ public:
     }
 
     template <class SeedSeq,
-              class = std::enable_if_t<detail::is_seed_sequence_v<SeedSeq>>>
-    void seed(const SeedSeq& seq) {
+              class = typename std::enable_if<detail::is_seed_sequence<
+                  typename std::remove_reference<SeedSeq>::type>::value>::type>
+    void seed(SeedSeq&& seq) {
         std::uint32_t buf[6];
-        seq.generate(buf, buf + 6);
+        detail::call_generate(seq, buf, buf + 6);
         seed_standard(detail::fold_seed_seq(buf, buf + 6));
         counter = 0;
         out_idx = 0;
@@ -419,26 +512,24 @@ public:
 
 class crypto64
 {
-    cascade_prng64* m_a;
-    cascade_prng64* m_b;
-    cascade_prng64* m_c;
+    std::unique_ptr<cascade_prng64> m_a;
+    std::unique_ptr<cascade_prng64> m_b;
+    std::unique_ptr<cascade_prng64> m_c;
 
 public:
-    crypto64(uint64_t seed1, uint64_t seed2, uint64_t seed3)
-    {
-        m_a = new cascade_prng64(seed1, 48);
-        m_b = new cascade_prng64(seed2, 49);
-        m_c = new cascade_prng64(seed3, 50);
-    }
+    crypto64(std::uint64_t seed1, std::uint64_t seed2, std::uint64_t seed3)
+        : m_a(new cascade_prng64(seed1, 48)),
+          m_b(new cascade_prng64(seed2, 49)),
+          m_c(new cascade_prng64(seed3, 50))
+    {}
 
     std::uint64_t generate_raw() {
-
-        auto a = m_a->generate_raw();
-        auto b = m_b->generate_raw();
-        auto c = m_c->generate_raw();
-        auto ab = (a + b) / 2;
-        auto ac = (a + c) / 2;
-        auto ca = ~((a + c) / 2);
+        std::uint64_t a  = m_a->generate_raw();
+        std::uint64_t b  = m_b->generate_raw();
+        std::uint64_t c  = m_c->generate_raw();
+        std::uint64_t ab = (a + b) / 2;
+        std::uint64_t ac = (a + c) / 2;
+        std::uint64_t ca = ~((a + c) / 2);
         return ab - ac + ca;
     }
 
@@ -446,21 +537,18 @@ public:
     crypto64& operator=(const crypto64&) = delete;
 
     virtual ~crypto64()
-    {
-        delete m_a;
-        delete m_b;
-        delete m_c;
-    }
+    {}
 };
 
 // ─── Проверки соответствия интерфейсу ───────────────────────────
+#if PR_HAS_CONSTEXPR
 static_assert(cascade_prng::min() < cascade_prng::max(),
               "cascade_prng: min() должен быть меньше max()");
 static_assert(cascade_prng64::min() < cascade_prng64::max(),
               "cascade_prng64: min() должен быть меньше max()");
+#endif
 
-#if defined(__cpp_lib_concepts) || (__cplusplus >= 202002L)
-#include <random>
+#if defined(__cpp_lib_concepts) || PR_LANG >= 202002L
 #include <concepts>
 static_assert(std::uniform_random_bit_generator<perfect_random::cascade_prng>,
               "cascade_prng должен удовлетворять std::uniform_random_bit_generator");
