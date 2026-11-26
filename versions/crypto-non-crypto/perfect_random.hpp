@@ -85,7 +85,7 @@
 #ifndef PR_HAS_INT128
 #  if defined(__SIZEOF_INT128__)
 #    define PR_HAS_INT128 1
-#  elif PR_MSVC_VER >= 1930   // MSVC получил __int128 к VS2022 (консервативный порог)
+#  elif PR_MSVC_VER >= 3210   //   (консервативный порог)
 #    define PR_HAS_INT128 1
 #  else
 #    define PR_HAS_INT128 0
@@ -374,29 +374,41 @@ private:
 
     static inline std::uint64_t mulmod(std::uint64_t x, std::uint64_t y) {
 #if PR_HAS_INT128
+        // GCC / Clang: нативный 128-битный тип
         return static_cast<std::uint64_t>((static_cast<__uint128_t>(x) * y) % M);
+#elif defined(_MSC_VER) && defined(_M_X64)
+        // MSVC x64: аппаратные интринсики.
+        // Требование _udiv128 (hi < делитель) выполнено: x, y < 2^61,
+        // значит hi = старшая половина произведения < 2^58 < M.
+        x %= M;
+        y %= M;
+        std::uint64_t hi;
+        const std::uint64_t lo = _umul128(x, y, &hi);
+        std::uint64_t rem;
+        (void)_udiv128(hi, lo, M, &rem);
+        return rem;
 #else
-        // Резерв для MSVC без __int128 (VS2013..VS2019, 32-битные сборки):
-        // 128-битное произведение через 32-битные половины.
-        // Важно: сначала редуцируем операнды по модулю M (< 2^61). Тогда все
-        // промежуточные суммы помещаются в uint64 без переполнения — старая
-        // версия переполнялась на (r_hi * 8 + r_lo) и молча съезжала на 8.
+        // Переносимый резерв (MSVC x86 и всё прочее без __int128):
+        // 128-битное произведение через 32-битные половинки.
+        // Редукция операндов до < 2^61 гарантирует отсутствие переполнений:
+        // lo < 2^64, mid < 2^62, r_hi < 2^59.
         x %= M;
         y %= M;
         const std::uint64_t x_lo = x & 0xFFFFFFFFULL, x_hi = x >> 32;
         const std::uint64_t y_lo = y & 0xFFFFFFFFULL, y_hi = y >> 32;
-        const std::uint64_t lo  = x_lo * y_lo;               // < 2^64
+        const std::uint64_t lo = x_lo * y_lo;               // < 2^64
         const std::uint64_t mid = x_lo * y_hi + x_hi * y_lo; // < 2^62
-        const std::uint64_t hi  = x_hi * y_hi;               // < 2^58
-        const std::uint64_t r_lo  = lo + (mid << 32);
+        const std::uint64_t hi = x_hi * y_hi;               // < 2^58
+        const std::uint64_t r_lo = lo + (mid << 32);
         const std::uint64_t carry = (r_lo < lo) ? 1ULL : 0ULL;
-        const std::uint64_t r_hi  = hi + (mid >> 32) + carry; // < 2^59
+        const std::uint64_t r_hi = hi + (mid >> 32) + carry; // < 2^59
         // p = r_hi * 2^64 + r_lo; по модулю M: 2^64 ≡ 8, 2^61 ≡ 1
         const std::uint64_t l1 = r_lo >> 61;                  // < 8
         const std::uint64_t l0 = r_lo & M;                    // < 2^61
         return ((r_hi * 8) % M + l1 + l0) % M;                // сумма < 2^62.01
 #endif
     }
+
 
     void step() {
         a = mulmod(a, MUL_A);
